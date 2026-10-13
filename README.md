@@ -2,12 +2,131 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A [Claude Code](https://claude.com/claude-code) skill that turns the papers you have collected for a research field into two writing skills for that field:
+**Write papers that read like your field.**
+
+A [Claude Code](https://claude.com/claude-code) skill that learns how a research field writes from the papers you collect, and turns that into two writing assistants for the field:
 
 - **`<field>-lit`** reviews a passage you wrote and reports whether it reads like your field's literature: terminology checked against your corpus, register rules, and sentence-to-sentence cohesion. It returns your text with the style fixed and leaves your argument, citations and numbers alone.
 - **`<field>-draft`** drafts one paragraph at a time. Each paragraph follows a structure (a "Version") observed in at least two papers of your corpus, and every claim needs a ledger row with a pasted source line before the sentence is written. It can also reverse-outline a finished section (`--outline`) and trace introduction or abstract claims to the tables that support them (`--trace`).
 
 Nothing is inherited from another field. Term counts, paragraph lengths, cohesion norms, the chapter taxonomy and the verb ladder for attributing claims are all measured on your own corpus.
+
+## Why we built this
+
+Most of us learn to write in a field the slow way: by reading hundreds of its papers until we know which terms people use, how a paragraph usually opens, and which verb fits when we report someone else's finding. Grammar checkers and general-purpose AI assistants cannot give you that knowledge. Their prose is fluent but generic. They use terms that no one in your field uses, they sound like AI, and they can turn what one paper reports about another study into that paper's own finding.
+
+This project is meant to help everyone write better by making the papers of your own field the standard. You collect the papers; the skill measures how they are written and checks your text against them. Every suggestion comes with its evidence: how many papers in your corpus use a wording, and the sentence where it appears. You can see why a change was made and decide for yourself whether to accept it.
+
+## Who it is for
+
+- **Graduate students and early-career researchers.** Learn how your field writes from the papers themselves, with counts and examples instead of rules of thumb.
+- **Authors who write in English as a second language.** The grammar may be fine while the word choice and sentence shapes still give the text away. Each suggestion shows the papers that use the wording, so you learn the idiom rather than only accepting a correction.
+- **Researchers moving into a new field.** Build the reference set from that field's papers, and its terms and paragraph conventions become explicit instead of something you absorb over years.
+- **Anyone who writes with an AI assistant.** AI prose tends to be fluent and generic, and it may introduce terms or attributions that are not in the sources. `-lit` flags wording your field does not use, and every claim in a `-draft` paragraph has a ledger row with its source line, or a flag telling you to check it.
+
+## What it does for you
+
+**`<field>-lit`, a reviewer that shows its evidence**
+
+- Checks every domain term against your corpus and reports how many papers use it, with a quoted line from one of them.
+- Replaces vague nouns with the precise term your field uses.
+- Flags a phrase as "AI voice" only when your corpus also rarely uses it; a phrase that appears in three or more of your papers is treated as your field's normal register.
+- Grades how each sentence connects to the one before it.
+- Gives a reason for every change and lists open questions under "leave to author".
+- Never changes your argument, citations or numbers.
+
+**`<field>-draft`, a drafter that will not write without a source**
+
+- Picks a paragraph structure that at least two papers in your corpus use for the same job.
+- Builds a claim ledger before writing: each claim gets a row with the attribution verb and the source line pasted from the paper, and anything it cannot source is flagged with `!!`.
+- Limits attribution verbs to what the source supports, using a verb ladder measured on your corpus ("find that" for results, "note that" when the source is thin).
+- Reverse-outlines a finished section and traces claims in the introduction or abstract to the tables that support them.
+
+## Examples from a real literature review
+
+The excerpts below come from a draft literature review on workers' compensation and medical bills, checked against a corpus of 66 papers in that area (51 of them are used for style checks). The excerpts are trimmed to a few lines, and corpus keys are shown as author and year.
+
+How to read the counts: `w:62` means 62 occurrences in total; `range:10/66` means the wording appears in 10 of the 66 papers.
+
+### 1. Terms checked against the corpus (`-lit`)
+
+Three phrases from the draft:
+
+> …medical costs paid through workers' compensation are higher than those paid through **general health insurance**…
+>
+> …fractures, lacerations, and other **clear-cut traumas** showed no such effect.
+>
+> …after the 2006 increase in the **weekly benefit ceiling**, affected workers' benefit duration increased by 11.1%…
+
+What `-lit` changed, and why (excerpt):
+
+```
+CHANGED (3)
+
+  1. "general health insurance" → "health insurance"
+     R7/§3 — vague modifier; "health insurance" is the corpus standard (range:29/66);
+     "general health insurance" appears in only 1 paper
+
+  2. "clear-cut traumas" → "traumatic injuries"
+     §3 — "clear-cut traumas" w:0 range:0/66; "traumatic injuries" w:62 range:10/66;
+     Fomenko & Gruber (the paper being described) uses "traumatic injuries" 22 times
+
+  3. "weekly benefit ceiling" → "maximum weekly benefit"
+     §3 — "weekly benefit ceiling" w:0 range:0/66; "maximum weekly benefit" w:18 range:2/66;
+     Cabral & Dillender (the paper being described) uses "maximum weekly benefit" 9 times
+```
+
+Two of the three replacements are the cited paper's own wording, which is what a reader who knows that paper expects to see.
+
+### 2. A claim ledger before the prose (`-draft`)
+
+For a paragraph on Graves et al. (2012), `-draft` chose **Version 3 (study by study, single study)** and filled the ledger before writing. Three of its rows:
+
+| cite-key | verb | claim | source | flag |
+|---|---|---|---|---|
+| Graves2012 | find that | Followed 1,830 workers identified from July 2002 to April 2004 | "From July 2002 to April 2004, 4354 workers were identified" (p.5); "the final study sample consisted of 1830 workers." (p.5) | |
+| Graves2012 | find that | Male workers were 43% more likely to receive an early MRI within 42 days of injury than female workers | "Multivariable regression showed that male workers were 43% more likely to receive an early MRI than female workers (IRR: 1.43, 95% CI: 1.12--1.82)" (p.6) | |
+| Graves2012 | find that | In Model 2, male IRR dropped to 1.24 (95% CI 0.98--1.58), no longer significant | Table 2 in the published journal version (not available in the PDF used for the note) | !! |
+
+One of the sentences it drafted:
+
+```latex
+Male workers were 43\% more likely than female workers to receive an MRI within 42 days of injury (IRR 1.43, 95\% CI 1.12--1.82); after excluding self-report variables that could have been affected by interview timing, the authors stated that the overall pattern of associations was similar to the main model, but the male-to-female ratio dropped to 1.24 (95\% CI 0.98--1.58) and was no longer statistically significant.
+```
+
+The `!!` row matters. `-draft` could not find a source line for the 1.24 figure, so it marked the row for checking instead of treating it as confirmed. When the author checked, the number was in Table 2 (p. 16) of the paper.
+
+### 3. Two skills, two kinds of evidence
+
+One paragraph opened with **"Regarding costs,"**. `-lit` passed it, because "Regarding" appears in 25 of the 51 papers. `-draft` keeps a record of how every paragraph in the corpus opens, and that record showed a different picture: only 2 of the corpus's 2,702 paragraph openings start with "Regarding"; the 25 papers use it mid-sentence. The paragraph was rewritten to open with its subject.
+
+More rewrites from the same review, each backed by a corpus count:
+
+| Draft wording | In the corpus | Revised wording |
+|---|---|---|
+| a longer time to return to work | 0/66 | delayed return to work (4/51) |
+| mostly indicate | 0/51 | mostly suggest ("suggest": 33/51) |
+| Industry composition can also alter aggregate results. | 0/51 | Aggregate results also depend on industry composition. ("depend on": 8/51) |
+| Studies controlling for … find similar results. | 0/51 | Results from studies that control for injury type in regression models are consistent with these findings. ("results from": 20/51; "consistent with": 31/51) |
+
+## What it can miss
+
+The same review also showed where the tools fall short. These are worth knowing before you rely on them:
+
+- **`-lit` checks wording, not facts.** Another draft of the paragraph above, written without a ledger, called the 1.24 figure an "odds ratio"; Graves et al. report an incidence rate ratio. `-lit` made no changes to that section, because the wording was fine. The error was caught only when each statement was checked against the paper.
+- **A first pass can be too lenient.** In the first round, all 13 section reviews passed, yet the text still used "the authors argue" 12 times (0 of the 51 papers use it), and its median sentence was 44 words long against 25 in the corpus. The review was then redone section by section under stricter rules: a full-text scan, long sentences split, and every term and framing phrase checked again.
+- **"Paper-specific, keep" needs a human check.** `-lit` kept "acute low back sprains" as Graves et al.'s own term. The paper actually says "back sprain/strain", and the final text follows the paper.
+- **Some changes remove meaning.** `-lit` once changed "fairly consistent" to "consistent" and deleted "the resulting"; both words carried meaning, and both changes were reverted.
+
+So check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
+
+## Design principles
+
+- **Your content stays yours.** The tools never change your argument, citations or numbers.
+- **The corpus is the only authority.** No rule is taken on trust; every verdict cites a count and a line from your own papers.
+- **No evidence, no sentence.** Every claim in a drafted paragraph has a source line, or a visible flag.
+- **You supply the papers.** The skill does not fetch, scrape or call any API.
+- **You stay in control.** The build stops after every tier, and the chapter taxonomy waits for your approval.
 
 ## How it works
 
