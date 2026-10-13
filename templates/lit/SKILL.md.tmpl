@@ -1,0 +1,334 @@
+---
+name: {{FIELD}}-lit
+description: Review an ENGLISH passage you wrote on {{FIELD_KEYWORDS}} and report whether it reads like the {{FIELD}} literature, then return your text with the style fixed. Looks at word choice, terminology, vague versus precise nouns, and sentence-to-sentence cohesion against a measured corpus of {{FIELD}} papers. It is a register reviewer, not an author: your argument, your citations and your numbers are never touched. Use when user says "审一下我这段{{FIELD}}英文", "像不像{{FIELD}}文献", "check my {{FIELD}} writing style", "does this read like the {{FIELD}} literature". NOT a proofreader, NOT a fact-checker (/verify-claims), and NOT for Chinese prose.
+author: Claude Code Academic Workflow
+version: 3.0.1
+argument-hint: "[file path or the text itself] [--audit]"
+disable-model-invocation: false
+allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
+---
+
+# `/{{FIELD}}-lit` — does my prose read like the literature?
+
+> **STAMPED INSTANCE ({{FIELD}}) — read this first.** This skill was stamped by
+> `/corpus-bootstrap` from the economics/finance parent (mimic-lit). The
+> WORKFLOW, the slots, the self-check and the query discipline are the parent's
+> verbatim — they are field-invariant. **Every corpus NUMBER quoted in the body
+> below (denominators, example counts, refuted-list entries) is the PARENT
+> corpus's illustration** until this instance's own measurements exist:
+> Tier 0 fills corpus_meta.yaml (quote ITS denominators, never the parent's),
+> Tier 1 fills register-measurements/cohesion-norms/transitions, Tier 4 fills
+> exemplars. `references/registry.json` (built_tiers) says what is live;
+> `py -3 scripts/check_drift.py` judges the instance at its built tier. The §6
+> refuted-list is parent-corpus-specific — what protects you HERE from day one
+> is the R4 gate itself: nothing is flagged as AI voice until THIS corpus has
+> been asked. Numbers below tagged *(parent)* are the economics corpus's; this
+> instance's live values are in `references/registry.json` and
+> `references/corpus_meta.yaml`.
+>
+> **English only.** The splitter, word lists and corpus are English: a Chinese
+> passage is read as one sentence with no words and every term returns zero.
+> Chinese instructions are fine; the passage under review must be English.
+
+
+You hand in a passage you wrote. This returns **your passage with the style fixed**, plus a line-by-line
+account of what changed and why. It is a **reviewer, not an author**: the argument, the citations and the
+numbers are yours and stay untouched.
+
+## How to query the corpus — one command, and never a hand-written Grep
+
+```
+py -3 scripts/attest.py "term one" "term two"
+py -3 scripts/attest.py --all "term"             # full concordance
+py -3 scripts/attest.py --json "term"            # for scripts/cache.py
+py -3 scripts/attest.py --scope style "term"     # §6/R2/R6 checks — style_safe papers
+py -3 scripts/attest.py --include-refs "term"    # also search reference lists/captions
+```
+
+Scope → rule-family mapping: **terminology (§3) uses the default `term` scope
+(`terminology_safe` papers)**; **register/AI-voice checks (§6 R2/R5/R6) use `--scope style`
+(`style_safe`)** — every count in `register-measurements.md` is measured at style_safe, and
+quoting a term-scope number for a §6 check misstates the denominator. The verdict separates
+research papers from reference documents: a phrase found only in agency reports is
+**REFERENCE-ONLY** — a legitimate term, but not evidence of research-prose register.
+
+Run it from the skill directory. It reports, per term: `w:` hits, **`range:` papers**,
+per-10k rate, the eligible denominator, a concordance with its source paper, and a verdict.
+
+**Do not hand-write a corpus Grep.** The skill used to require one batched `Grep` per run,
+alternating several terms into a single pattern, and that is what produced the failure this
+script exists to prevent. Measured: `monotonic` occurs in 32 papers, but inside a six-term
+alternation its first hit lands at **position 379** of the result stream, past the Grep
+tool's default `head_limit` of **250**. The term came back as "0 hits across 165 papers" and
+was refused on that basis *(parent)*. The call looked like it succeeded.
+
+Three properties make that class of failure structural rather than incidental:
+
+- **One term per search.** Terms are never alternated, so a common term cannot crowd out a
+  rare one.
+- **Counting is separate from display.** Totals are computed over the whole corpus first; the
+  concordance is capped afterwards and the cap is always announced — *"showing 8 of 42; 34
+  not shown"*. A truncated display can never be read as a small count.
+- **Every variant runs, and hits are unioned.** Literal (straight and curly apostrophes are
+  one class; a phrase wrapped across a line still matches), British/American spelling,
+  hyphen/space (`de-risking` ~ `de risking` ~ `derisking`) and the suffix family all run, and
+  the report says how many hits each variant added. A bare zero is never returned without
+  evidence that every variant also failed.
+
+**Quote the denominator the script gives you, never the raw file count.**
+`references/corpus_meta.yaml` carries four (live values mirrored in `registry.json` →
+`corpus`):
+
+| denominator | meaning |
+|---|---|
+| `files` | `.txt` files on disk — counts duplicates, damaged and excluded files |
+| `distinct` | after alias-normalising byte-identical duplicates |
+| **`terminology_safe`** | **use this for term verdicts** — also drops damaged extractions (scans, lost ligatures/spaces) and `excluded` entries |
+| `style_safe` | also drops reference documents (`terminology_only`: agency reports, slides) — use for register/style checks |
+
+Rebuild the manifest with `py -3 scripts/build_corpus_meta.py` if the corpus changes.
+
+## Rules
+
+1. **Style only.** Never change a claim, a citation (`\citep{}`/`\citet{}`, `[12]`, `[@key]`), a number, or the order of the argument.
+   If a sentence is stylistically fine, it comes back verbatim.
+2. **Check against `references/register.md`** — §1 verbs and glue (R1–R3), §3 precise nouns, §6 AI-voice
+   (R4–R8), §8 cohesion (R9–R11). That file is the checklist; load it every run.
+3. **The corpus is the only authority, and that includes AI-voice.** A term is attested only if it
+   survives all three tests below. Consult `references/terms.md` first — it is a real cache, not a hint.
+4. **Nothing is flagged as AI voice until the corpus has been asked** (`register.md` §6 R4).
+   Run `attest.py` **before** forming the judgment, not after. **A phrase in ≥3 eligible papers is
+   this literature's register, not an AI tell** — flagging it moves the author's prose *away* from the
+   corpus. This is a gate, not a post-filter. Measured on the parent economics corpus, the old §6
+   blacklist was almost entirely wrong: `it is important to note that` in **24 papers**,
+   `not only … but also` in **47**, sentence-initial `Moreover,` in **92** *(parent)*. THIS corpus's
+   table: `references/register-measurements.md` (Tier 1).
+5. **Every domain term in the passage gets a row in the `TERMS` block — passing terms included**,
+   and every register check gets a row in the `REGISTER` block, **including the ones that fired
+   nothing**. These two blocks are what make the review auditable: a reviewer who checked seven terms
+   and cleared all seven writes seven ✅ rows and is thereby distinguishable from a reviewer who
+   checked none. Report the counts, never the word "audited".
+6. **Every change carries its reason** — a `register.md` rule ID (R1–R11) or § number, or verbatim
+   corpus evidence. No reason, no change. Anything you are unsure of goes in **Leave-to-author**.
+7. **A check that has ever produced a false positive is demoted to a question, permanently** (§6 R8).
+   Raise it with its evidence; never assert it as a defect.
+8. **Nothing is written to the user's manuscript** until the user says to place it. The term cache is
+   the one exception and it has its own protections — see step 7 of the workflow.
+
+## Workflow
+
+| # | Step | Calls |
+|---|---|---|
+| 1 | **INTAKE** — read the passage (file path, or the text pasted in the prompt) | 0–1 |
+| 2 | **SCAN** — read the passage against `register.md` R1–R11 and **write out the list of domain terms it contains**. A read-through, not a tool call | 0 |
+| 3 | **ATTEST** — split the term list: those `terms.md` clears by `ctx:`, and the rest. `py -3 scripts/attest.py "<term>" …` for the rest. **Any candidate AI-voice flag goes through this step too, before it becomes a finding** (rule 4) | 1–2 |
+| 3b | **COHESION** — for any passage of ≥3 sentences: `py -3 scripts/cohesion.py --section <sec> "<paragraph>"`. Its output seeds the JOINS table (R9) and names the mandatory M8 pair (R10) | 1 |
+| 4 | **FIX** — apply, recording a rule ID or corpus line per change. One more `attest.py` call only to prove a *replacement* is attested | 0–2 |
+| 5 | **SELF-CHECK** — the questions below | 0 |
+| 6 | **OUTPUT** — corrected passage, then `TERMS`, then `REGISTER`, then the change table | 0 |
+| 7 | **CACHE** — `py -3 scripts/cache.py add "<term>" …` for everything this run established. Nothing is lost between runs | 1 |
+
+**Budget: ≤9 tool calls; no subagent unless `--audit`.** Allocation: passage 1 · `register.md` 1 · `terms.md` 1 ·
+**`attest.py` ≥1, not skippable** · **`cohesion.py` 1 (≥3-sentence passages, not skippable)** ·
+replacement evidence 0–2 · `cache.py` 1.
+
+The attestation call is the one this skill exists for. When the budget is tight, cut the replacement
+evidence call, never the attestation. `attest.py` takes several terms in one invocation and searches
+each independently, so widening the term list costs no extra calls.
+
+`--audit` adds one fresh-context `humanize-auditor` pass; off by default, because what comes back is the
+user's own text and they read it.
+
+### Step 5 · SELF-CHECK (zero calls, run it every time)
+
+Each question below is answered by looking at a **slot in the output**, not by recalling what you
+did. That is deliberate: a checklist answered from memory is answered "yes".
+
+1. **Is the `TERMS` block empty?** → the review did not happen. Return to step 3.
+2. **Is the `REGISTER` block empty, or missing a row for any of R1–R11?** → the register pass did not
+   happen. Every rule prints a row, and a rule that fired nothing prints `0`. Not `None`, not omitted —
+   a zero, so that "checked and clean" and "never checked" cannot look alike on the page.
+2b. **Does the passage have ≥3 sentences but no `JOINS` table, or a JOINS table with fewer than
+   N−1 rows?** → the cohesion pass did not happen (R9). Six sentences means five rows, every row
+   with a grade, a relation (or failure label), and a carrier. And the `PARAGRAPH` row must show
+   the M8 pair **adjudicated**, not merely printed (R10). On a passage of **fewer than 3
+   sentences**, R9–R11 print `n/a (<3 sentences)` — printed, never omitted; there is no interior
+   structure to measure, and the row says so.
+3. **Does every domain term in the passage appear in `TERMS`?** A term you decided was fine still
+   needs its row.
+4. **Does every `⛔` carry evidence** — a `ctx:` from cache, or an `attest.py` line with its paper?
+   Without one it is a guess: downgrade to `?` and move it to Leave-to-author.
+5. **Did any AI-voice flag skip the gate?** Every §6 finding must show the attestation that cleared
+   it to fire (rule 4). A §6 finding with no `range:` beside it is invalid — drop it.
+6. **Are all the findings merely grammatical?** Spelling, plurals, articles, tense. If nothing in
+   `CHANGED` cites a rule ID or a corpus line, the register pass was skipped.
+7. **Did step 7 run?** Everything this run established should be in `candidates.md`, or the next run
+   re-litigates it from scratch.
+
+## What to flag
+
+| Class | Flag | Ref |
+|---|---|---|
+| Verbs | Personifying / metaphorical verbs — `courts, lifts, climbs, loads, tilts, pulls, pushes, reshapes, invites, drains` and anything in that pattern → **raise as a question with the attest.py concordance attached** (R2 is judgment-only: noun/verb homographs make it unmeasurable) and offer a §1 plain verb | §1 R2 |
+| Glue | Explanatory connectives used as the **author's own** link: `so`, `since`, `because … and this is`, `thereby`, `therefore`, `in order to`, `as a result` | §1 |
+| Nouns | Vague stand-ins where the corpus names the specific institution, programme or quantity. *(parent: `the insurer` → `the PBGC` in pensions — in another field `the insurer` may itself BE the corpus term; attest before replacing)* | §3 |
+| Terms | Every domain noun phrase in the passage, checked against the corpus. **Extract them all first, then judge** — the ones that fail are never the ones you suspected. Highest-yield shapes: coined compounds (`re-risking`, `adviser scale`, `information-capacity`), plausible-but-absent variants of a real term (`fund ratio` for `funding ratio`, `adopt relief` for `elect relief`), imported jargon from another field (`boundary condition`, `liquid-asset retention`), and superlative modifiers (`top tier`, `top-ten`) | §3 |
+| AI voice | **Only the R6 items THIS corpus measured rare** (`register-measurements.md` table D) — everything else goes through the R4 gate first. Never re-add a phrase the corpus uses in ≥3 papers (§6 R5) | §6 R4–R6 |
+| Cohesion | Run `py -3 scripts/cohesion.py` and fill the JOINS table (R9, N−1 rows) + the PARAGRAPH row (R10, incl. the mandatory M8-pair adjudication). Flag: a join with no carrier and no nameable relation; a bare `This`/`These` with no antecedent; a connective asserting a relation the prose does not carry. Do NOT flag an opener the corpus uses sentence-initially in ≥3 papers (`register-measurements.md` A2) | §8 R9–R11 |
+| Citations | Only for an author-year (natbib) manuscript: `\citep{}` where the work is the sentence's subject should be `\citet{}`. Numeric/superscript manuscripts: no citation-form rule — mechanical, never a content change | — |
+
+## The three-test rule for terminology
+
+**A count is not attestation — read the concordance.** `py -3 scripts/attest.py "term one" "term two"`
+searches each term independently (never alternated; that alternation is what produced the position-379
+false zero) and always returns KWIC context with its source paper. Judge from the returned lines, never
+from the `w:` number alone; the three tests below are applied to what the concordance shows.
+
+A term is attested only if a hit is (1) **word-bounded**, (2) **standalone, not a compound prefix**, and
+(3) **the same sense, in running prose** — not a bibliography line (attest.py cuts reference lists by
+default since 2026-10-07; `--include-refs` restores them). Real failures from the parent corpus
+*(parent)*: `LDI` was 13 hits by count but 1 by `grep -ow` (the rest `holdings`, `Guldi`, `building`) and
+that one is a footnote URL; `corporate cash` was 6 hits, all `corporate cash flow` or a reference-list
+title. This instance records its own in `terms.md` Section C.
+
+Attested → record the evidence. In the manuscript but not the corpus → ⚠️ **paper-only**, surface it,
+never silently keep or cut. In neither → offer the corpus-standard term.
+
+## Output
+
+The example below is the **parent's** (economics/pensions) — copy its SHAPE; every term, count and
+denominator in a real run comes from this instance's corpus.
+
+```
+<the corrected passage, verbatim, nothing above it>
+
+──
+TERMS (7 checked · 4 cached · 3 attested · denominator 155 terminology-safe)
+  ✅ risk shifting          cache · "…allows for possible risk shifting to plans' beneficiaries"
+  ✅ funding ratio          cache · "…larger increases in their funding ratios from MAP-21"
+  ✅ equity share           w:31 range:12/155 · BergstresserDesaiRauh2006 "…OLS regressions of
+                            equity shares on the assumed return"
+  ✅ mandatory contributions cache · "…required to make mandatory contributions to their pension plans"
+  ⛔ re-risking             w:0 range:0/155 (variants tried: literal, hyphen/space, stem)
+                            → de-risking (w:610 range:20/155)
+  ⛔ top tier               w:0 range:0/155; DeAngelo1981 modifies audit firms as "large"
+  ⚠️ prefunding balance     §B paper-only, w:0. Institutional term from Schedule SB — keep?
+
+REGISTER (11 checks · 7 clean · 4 fired)     4 of 11 checks fired
+  ✅ R1 plain verbs                    0
+  ⚠️ R2 personifying verbs             1   "courts financial distress" — judgment, not asserted:
+                                           attest.py says `court` has 0 verb uses in 149 papers
+                                           (every hit is "bankruptcy courts"). Suggest "increases".
+  ✅ R3 explanatory glue               0
+  ✅ R4 AI-voice gate                  0   3 candidates raised, all 3 cleared by the corpus:
+                                           "not only…but also" range:47 · "note that" range:24
+  ✅ R5 refuted list re-added          0
+  ✅ R6 measured-rare items            0
+  ⛔ R7 vague nouns                    1   "the insurer" → "the PBGC" (§3)
+  ✅ R8 demotions honoured             0   (R8 is the demotion rule, NOT cohesion)
+  ⚠️ R9 joins                          1   see JOINS below — S2→S3 no-carrier
+  ⚠️ R10 paragraph                     1   M8 pair adjudicated: same-argument-twice
+  ✅ R11 wording discipline            0   percentiles only, both tails, no verdicts
+
+JOINS (5 rows for 6 sentences · TS-D)      norm: results × 5–6 (n=194)
+  S1→S2  GOOD    overlap 0.31  [result]        carrier: lexical "relief"
+  S2→S3  BROKEN? overlap 0.00  [no-carrier]    all three carriers absent
+  S3→S4  STRONG  overlap 0.44  [elaboration]   carrier: stress→topic "premiums"
+  S4→S5  GOOD    overlap 0.12  [sequence]      carrier: connective "Second," (licit)
+  S5→S6  GOOD    overlap 0.30  [instantiation] carrier: lexical
+  (per-join numbers are grade+overlap+carrier — cohesion.py emits no per-join
+  percentile; percentiles exist only at paragraph level. Do not invent them.)
+PARAGRAPH  topic-string {relief, premiums, states} narrow ✓ · point: one ✓ ·
+           M8 pair S1↔S6 {level, panel, state} — adjudicated: legitimate recurrence
+
+CHANGED (n)
+  1. "the insurer" → "the PBGC"
+     R7/§3 — precise institutional noun; corpus uses "the PBGC" throughout
+  2. "poorly funded sponsors" → "sponsors with underfunded plans"
+     §3 — corpus modifies plans, never sponsors ("poorly funded sponsors" w:0;
+     "sponsors with underfunded plans" in AnHuangZhang2013)
+
+LEAVE TO AUTHOR
+  ⚠ "courts financial distress" — R2 is judgment-only (noun/verb homograph makes it
+    unmeasurable). Evidence attached above; your call.
+  ⚠ "prefunding balance" — main.tex only, absent from corpus. Institutional term; keep?
+
+READS LIKE THE LITERATURE: <yes / mostly, n fixes / not yet, m structural issues>
+→ nothing written to your manuscript. Say "place it" to write it back.
+→ cached: py scripts/cache.py add "equity share" "re-risking" "top tier"
+```
+
+### The two blocks are slots, not reminders
+
+`TERMS` and `REGISTER` both print **every row every time, including the rows that found nothing** —
+a check that fired nothing prints `0`, never `None` and never an omitted line.
+
+The reason is that the failure being prevented is an *omission*, and prose asking for the row does not
+prevent omissions. Controlled wording tests reported in `obra/superpowers` found that on shaping
+problems the prohibition arm produced **more** of the unwanted output than the recipe arm, and trended
+worse than giving no guidance at all; the fix for "omits a required element" is a required slot in the
+template, not a reminder near it. This file used to carry eight lines of prose re-arguing that `TERMS`
+was mandatory. Those lines are gone, replaced by the slots above.
+
+So: a reviewer who checked eight rules and cleared six writes eight rows. A reviewer who checked none
+writes nothing, and the difference is visible on the page. That is the whole mechanism.
+
+If the passage is genuinely clean, still print both blocks, then say so in one line and return the
+passage unchanged. "No `CHANGED` rows" and "no `TERMS`/`REGISTER` rows" are different claims, and only
+the first is ever true.
+
+## References
+
+All paths are anchored at `.claude/skills/{{FIELD}}-lit/` (this skill's own folder) — not at the
+working directory, and never at the parent `mimic-lit/`, whose corpus is economics.
+
+**Every reference is one hop from this file.** Anthropic's skill guidance notes that a reference
+reached *through another reference* may be previewed with `head -100` rather than read whole,
+"resulting in incomplete information". That is not hypothetical here: `register.md` §4 pointed at
+`terms.md` §A, and §A's `w:` counts are exactly what went missing from the copy. Keep the layer flat.
+
+### Scripts — run these, do not reimplement them
+
+| Script | What it does |
+|---|---|
+| `scripts/attest.py` | **Every run.** One term per search, counting separate from display, zero triggers a widened retry. Replaces every hand-written corpus Grep |
+| `scripts/cache.py` | **Step 7.** `add` writes candidates; `promote` moves them into `terms.md` behind a backup and a survival check |
+| `scripts/build_corpus_meta.py` | Only when the corpus changes — regenerates the admission manifest |
+| `scripts/measure_register.py` | Only when a register rule is added or questioned — reproduces every count in `register-measurements.md` |
+| `scripts/check_drift.py` | Read-only consistency check over the whole reference layer |
+| `scripts/cohesion.py` | **Every run on a ≥3-sentence passage.** Joins graded by antecedent distance, paragraph metrics as corpus percentiles, the mandatory M8 pair. Seeds R9/R10 |
+| `scripts/build_cohesion_norms.py` | Only when the corpus, splitter or `para_min_chars` changes — rebuilds `cohesion-norms.json` |
+| `scripts/build_transitions.py` | Only when the corpus changes — rebuilds `transitions.md` |
+| `scripts/build_exemplars.py` | Tier 4 — assembles `exemplars.md` from verified tagging shards |
+| `scripts/backfill_cite_keys.py` | Maintenance — fills missing cite-keys on `terms.md` Section A rows |
+| `scripts/textseg.py` | Never run directly (self-test aside); the shared splitter and `clean_prose` every script imports |
+| `scripts/_fieldconfig.py`, `scripts/_cfgparse.py` | Never run directly; read `references/field-config.yaml` (identical `_cfgparse.py` in the draft instance) |
+
+### Reference files
+
+| File | When |
+|---|---|
+| `references/register.md` | **Every run** — the checklist itself, rules R1–R11 |
+| `references/register-measurements.md` | Whenever a register rule is questioned — every rule with its corpus count, including the refuted ones. **If it disagrees with `register.md`, it wins** |
+| `references/terms.md` | **Every run** — A clears with no search if it has `ctx:`, **but still prints a `TERMS` row**; B is paper-only; C is a negative cache with reasons |
+| `references/corpus_meta.yaml` | Whenever a denominator is quoted — the four denominators, each paper's role, group, citation culture and extraction verdict |
+| `references/corpus_sources.json` | When a paper's text is questioned — where each corpus file came from, which converter (and version) produced it, ingest flags |
+| `references/candidates.md` | Step 7 — attestations awaiting review; nothing here is authoritative yet |
+| `references/corpus/*.txt` | Reached through `attest.py`, not by hand |
+| `references/exemplars.md` | Tier 4. On demand, to prove a suggested replacement is how the literature writes it. **Grep by move tag; never read whole** (size and counts: `registry.json` → `exemplars`) |
+| `references/registry.json` | Read by `check_drift.py`; the declared invariants for the whole layer, and the live counts quoted above |
+| `references/transitions.md` | Part of the cohesion check (not gated behind a prior flag): real joins from the style-safe papers, grouped by relation (counts: `registry.json` → `transitions`) — the exemplar bank for R9's relation labels |
+| `references/cohesion-canon.md` | When a join verdict is contested or a rule questioned — the distilled writing canon (K1–K15, P1–P6, D1–D6), every rule with its corpus status. **If it disagrees with §8, the canon wins** |
+| `references/cohesion-norms.json` | Read by `cohesion.py`; percentile cells by section × length bin, plus the three adjudication measurements |
+| `references/cohesion-measurements.md` | Whenever a cohesion number is questioned — coverage, adjudications, norm medians, and what the motivating case refuted |
+
+## What this is NOT
+
+- **Not a ghostwriter** — it edits your prose; it does not produce claims or draft passages for you.
+- **Not a fact-checker** — it never checks that a cited paper supports what you attribute to it. Use
+  `/verify-claims`. Attribution errors are the ones that sink a paper, and a style pass cannot see them.
+- **Not for Chinese (or any non-English) prose** — the corpus, splitter and word lists are English.
+- **Not a manuscript review** (`/review-paper`) and **not a proofreader** (`/proofread`) — register only.
+  This is the failure mode to watch for in yourself. Spelling, plurals, articles and tense are `/proofread`'s
+  job; fixing them here is not wrong, but a review that found *only* those has not run this skill — it read
+  the passage without ever opening the corpus. The `TERMS` block exists to make that visible on the page.

@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Declared invariants for a stamped <field>-lit instance, read by",
+    "scripts/check_drift.py.  Values marked null are filled by the tier that",
+    "produces them; built_tiers records progress and gates the checker's",
+    "sections.  Every number carries a sibling _why once filled -- the parent",
+    "discipline: no voodoo constants."
+  ],
+  "field": "{{FIELD}}",
+  "built_tiers": [],
+  "_why_built_tiers": "appended by the factory at each tier acceptance: 0=corpus, 1=style layer, 2=chapter map (lives in the draft instance), 4=exemplars",
+  "corpus": {
+    "files": null,
+    "distinct": null,
+    "terminology_safe": null,
+    "style_safe": null,
+    "_why": "the four denominators from corpus_meta.yaml -- 'files' counts duplicates and damaged extractions; quote the right one for the question (term verdicts use terminology_safe, style norms use style_safe)"
+  },
+  "thresholds": {
+    "attested_min_papers": 3,
+    "_why_attested_min_papers": "corpus-linguistics floor: a phrase carried by three independent author teams is no longer one author's habit; identical constant in attest.py and measure_register.py, agreement asserted by check_drift"
+  },
+  "transitions": {
+    "joins": null,
+    "papers_covered": null,
+    "_why": "filled from build_transitions.py output at Tier 1"
+  },
+  "cohesion": {
+    "style_safe_papers": null,
+    "total_paragraphs": null,
+    "adjacent_pairs": null,
+    "_why": "filled from build_cohesion_norms.py output at Tier 1; fine per-section cells arrive only after Tier 2 slices exist"
+  },
+  "exemplars": {
+    "sections": null,
+    "tagged_sentences": null,
+    "move_tags": [],
+    "meta_headings": [],
+    "_why": "filled at Tier 4 from the tagging passes (build_exemplars.py prints the counts); move_tags = the 8-label vocabulary from prompts/exemplar-tagging.md, asserted both ways by check_drift; meta_headings = non-paper ## headings in exemplars.md; watch for BOM at section boundaries (the parent's 159-counted-as-158 lesson)"
+  }
+}

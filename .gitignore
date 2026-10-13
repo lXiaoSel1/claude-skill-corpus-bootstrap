@@ -1,0 +1,14 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Copyrighted texts and corpora never belong in this repository
+references/canon-sources/*.txt
+references/canon-sources/_raw/
+**/drop/
+**/references/corpus/
+*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db

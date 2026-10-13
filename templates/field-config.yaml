@@ -1,0 +1,73 @@
+# field-config.yaml — one file, one field. Written by stamp.py, edited at
+# tier gates. Both instances' scripts read THIS file (via _cfgparse.py, one
+# identical copy per instance) — the single source that replaced the parent's
+# scattered hardcoding.
+#
+# Syntax (the subset _cfgparse understands): `key: value`, `key: [a, b]`, or
+# `key:` followed by `  - item` lines. Quote regexes with single quotes
+# ('Key\s*words' — backslashes stay literal). Inline `# comments` are allowed.
+# Save as UTF-8 (PowerShell 5.1 Set-Content defaults to ANSI — use
+# `-Encoding utf8` or an editor).
+
+field: {{FIELD}}
+# citation_style: author-year | numeric | mixed
+#   mixed = the corpus combines (Author, Year) and [n]/superscript fields
+citation_style: {{CITATION_STYLE}}
+
+# The sibling instance names (stamp fills these; scripts resolve paths by them)
+lit_instance: {{FIELD}}-lit
+draft_instance: {{FIELD}}-draft
+
+# Pinned PDF converter (Tier 0 reproducibility). Empty = first pdftotext on
+# PATH, then PyMuPDF. On Windows PowerShell and Git Bash resolve DIFFERENT
+# builds (MiKTeX poppler vs Git xpdf) — pin one.
+pdftotext:
+
+# The ONE paragraph-length threshold (chars) for every measurement
+# (textseg, cohesion norms, register). Calibrate at Tier 1.
+para_min_chars: 150
+
+# Corpus documents kept OUT of the research-prose style sample but still
+# searched for terminology (agency reports, slide decks, actuarial tables).
+# Reviewed at Tier 0 acceptance. One key per line, comments allowed.
+terminology_only:
+
+# Corpus documents kept out of BOTH samples (abstract-only entries, unreadable
+# scans you chose not to OCR). Reviewed at Tier 0 acceptance.
+excluded:
+
+# ---- filled at Tier 2 (taxonomy approval) ----------------------------------
+# The field's chapter jobs, from the APPROVED induction — never economics'.
+jobs:
+
+# Jobs sliced by position rather than heading, in document order. The FIRST
+# is the front block (abstract-like). Later ones start at
+# positional_anchors_<job> (regex list) or right after the previous one.
+positional_jobs:
+
+# Optional: the job the structure layer treats as "the introduction"
+# (default: first job after the front block)
+intro_job:
+
+# Regex alternatives that may OPEN a front block lacking the word "Abstract"
+# (medicine: Summary, Objective, Importance, Background, Context)
+abstract_start_markers:
+
+# Regex alternatives marking the front block's END (economics: JEL/keyword
+# lines; medicine: Key\s*words, Trial registration, Key messages, Level of
+# evidence). Do NOT use Background/Methods/Results/Conclusions — those labels
+# occur INSIDE structured abstracts and would cut them after the first label.
+abstract_end_markers:
+
+# Optional heading-vocabulary regex fragment boosting a1 recall (empty = rely
+# on title-case detection; declare the FIELD's words, not economics')
+headwords:
+
+# Tier 4: where the writing-canon sources live (default: the factory's
+# references/canon-sources next to this instance)
+canon_dir: {{CANON_DIR}}
+
+# ---- filled at manuscript onboarding ---------------------------------------
+# .tex or .md; paths absolute or relative to the project root
+manuscript_tex:
+manuscript_tables:
