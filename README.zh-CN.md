@@ -177,11 +177,11 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - 语料是唯一依据：每个判断都引用你自己语料里的计数和原句。
 - 起草出的每个论断都有出处原句，或者有一个看得见的标记。
 - 论文由你提供。这个 skill 不抓取、不爬网页，也不调用任何 API。
-- 每过一关都会停下来，章节分类要等你批准。
+- 每过一关都会停下来（一键接入时第 0、1 关连着跑完），章节分类要等你批准。
 
 ## 工作方式
 
-搭建分五关进行。每一关结束都有验收：一个 `check_drift` 脚本，加上一项需要你亲自看的检查。每过一关，skill 都会停下来等你确认。
+搭建分五关进行。每一关结束都有验收：一个 `check_drift` 脚本，加上一项需要你亲自看的检查。每过一关，skill 都会停下来等你确认（一键接入例外，见下文）。
 
 | 关 | 产出 | 成本 | 验收 |
 |---|---|---|---|
@@ -264,7 +264,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap ~/.claude/skills/corpus-bootstrap
 ```
 
-文件夹必须叫 `corpus-bootstrap`。生成的两个 skill 默认放在它旁边，即同一个 `skills/` 目录下，也可以用 `--dest` 指定位置。放在项目自己的 `.claude/skills/` 里也可以。
+文件夹必须叫 `corpus-bootstrap`。生成的 skill 默认放在它旁边，即同一个 `skills/` 目录下，也可以用 `--dest` 指定位置。放在项目自己的 `.claude/skills/` 里也可以。
 
 ## 快速开始
 
@@ -293,7 +293,7 @@ py -3 scripts/tier_status.py ecology
 **也可以从一份稿件和你的文献库开始。** 在 Claude Code 里说 `/corpus-bootstrap polish` 并给出路径，Claude 会依次跑下面几步，到第 2 关之前先问你。手动运行：
 
 ```bash
-# 1. 把每个引用对到 PDF，盖章并导入语料
+# 1. 把每个引用对到 PDF，生成这个领域的 skill 并导入语料
 #    （不加 --field 会停下来问领域名；--dry-run 只建索引）
 py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs \
     --library /path/to/library.bib --field ecology --keywords "population ecology, habitat loss"
@@ -376,3 +376,5 @@ docs/images/                README 用到的截图
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。版本 1.2.0（2026-10-14）。
+
+作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

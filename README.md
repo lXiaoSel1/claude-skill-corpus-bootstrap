@@ -177,11 +177,11 @@ Check numbers and findings against the source, use the `-draft` ledger to see wh
 - The corpus is the only authority: every verdict cites a count and a line from your own papers.
 - Every claim in a drafted paragraph has a source line or a visible flag.
 - You supply the papers. The skill does not fetch, scrape or call any API.
-- The build stops after every tier, and the chapter taxonomy waits for your approval.
+- The build stops after every tier (one-step onboarding runs Tiers 0 and 1 together), and the chapter taxonomy waits for your approval.
 
 ## How it works
 
-The build runs in five tiers. Each tier ends with an acceptance gate: a `check_drift` script plus something you check by eye. The skill stops after every tier and waits for you.
+The build runs in five tiers. Each tier ends with an acceptance gate: a `check_drift` script plus something you check by eye. The skill stops after every tier and waits for you, except during one-step onboarding (see below).
 
 | Tier | What it builds | Cost | Acceptance |
 |---|---|---|---|
@@ -376,3 +376,5 @@ docs/images/                screenshots used in this README
 ## License
 
 MIT. See [LICENSE](LICENSE). Version 1.2.0 (2026-10-14).
+
+Written by Xuan Tang, in a project built on Pedro Sant'Anna's [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) template for academic work with Claude Code.
