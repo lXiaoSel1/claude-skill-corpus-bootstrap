@@ -28,8 +28,8 @@ DATA LAYERS -- three, with different denominators, never mixed silently
        "obligatory", only "attested-in >= n/den".
 
 RUN
-    py scripts/measure_structure.py            # report + write norms json
-    py scripts/measure_structure.py --dry      # report only
+    py -3 scripts/measure_structure.py            # report + write norms json
+    py -3 scripts/measure_structure.py --dry      # report only
 """
 import collections
 import glob

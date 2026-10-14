@@ -7,9 +7,11 @@ edit both field-configs' lists and re-run with --keep-config):
   * ERROR (conversion failed)            -> excluded
   * SCAN (image-only, < 60 words/page)   -> excluded (OCR it and re-ingest to keep it)
   * INTERLEAVED (two columns read across) -> re-extracted with PyMuPDF; still
-                                           interleaved -> excluded
-  * a report / book / misc entry (the map's role, from the .bib type)
+                                           interleaved, or no PyMuPDF -> excluded
+  * a report / book / manual entry (the map's role, from the .bib type)
                                          -> terminology_only
+  * a working paper or preprint (@techreport, @misc, @unpublished, @online)
+                                         -> research; terminology_only only if SHORT
   * SHORT (< 1,500 words): a report or a key with no .bib type -> terminology_only;
     a research article -> excluded (abstract-only or a landing page)
   * not English by its first pages (the onboarding index) -> excluded
@@ -54,17 +56,32 @@ def main():
 
     src = sources()
     inter = sorted(k for k, r in src.items() if "INTERLEAVED" in r.get("flags", []))
+    reextract_note = "columns still interleaved after PyMuPDF re-extraction"
     if inter and not a.no_reextract and not a.keep_config:
-        if os.path.isfile(cmap):
+        try:
+            import fitz  # noqa: F401
+            have_fitz = True
+        except ImportError:
+            have_fitz = False
+        if not have_fitz:
+            reextract_note = ("columns interleaved; PyMuPDF is not installed to re-extract them"
+                              " (%s -m pip install pymupdf, then run this again)" % F.PY)
+            print("interleaved papers found, but PyMuPDF is not installed: %s" % ", ".join(inter))
+        elif os.path.isfile(cmap):
             print("re-extracting %d interleaved paper(s) with PyMuPDF: %s" % (len(inter), ", ".join(inter)))
             args = [sys.executable, "-B", os.path.join(F.HERE, "ingest.py"), fld.lit, "--map", cmap,
                     "--converter", "pymupdf"]
             for k in inter:
                 args += ["--force", k]
-            F.run(args, show=False)
+            r = F.run(args, show=False, check=False)
+            if r.returncode != 0:
+                reextract_note = "columns interleaved; the PyMuPDF re-extraction failed"
+                print("re-extraction failed (exit %d); those papers are excluded" % r.returncode)
             src = sources()
         else:
             print("interleaved papers found but no corpus_map.csv to re-extract from: %s" % ", ".join(inter))
+    style_before = fld.style_safe_ids() if os.path.isfile(
+        os.path.join(ref, "corpus_meta.yaml")) else None
 
     lang = {}
     for idx_path in index_paths(fld):
@@ -89,14 +106,17 @@ def main():
                 excl.append((k, "image-only scan (%s words/page); OCR it and re-ingest to keep it"
                              % r.get("words_per_page")))
             elif "INTERLEAVED" in flags:
-                excl.append((k, "columns still interleaved after PyMuPDF re-extraction"))
+                excl.append((k, reextract_note))
             elif lang.get(k) == "non-en":
                 excl.append((k, "not English by its first pages"))
             elif role == "abstract_only":
                 excl.append((k, "abstract only (corpus map role)"))
             elif role in ("report", "reference"):
-                term.append((k, "report / book / misc entry (%s)"
+                term.append((k, "report / book / manual entry (%s)"
                              % (rows.get(k, {}).get("note", "") or "role " + role)))
+            elif role == "working" and "SHORT" in flags:
+                term.append((k, "working paper / preprint entry with only %s words: kept for terms only"
+                             % r.get("words")))
             elif "SHORT" in flags and role == "research":
                 excl.append((k, "research entry but only %s words: abstract-only or landing page"
                              % r.get("words")))
@@ -131,6 +151,11 @@ def main():
                 den["style_safe"], len(term)))
     fld.update_registry("lit", fill)
     fld.add_tier(0)
+    # Tier 1 measured the old style-safe set: a changed set makes its numbers stale
+    if 1 in fld.built_tiers() and style_before is not None and fld.style_safe_ids() != style_before:
+        fld.drop_tier(1)
+        print("\nthe style-safe papers changed, so Tier 1 is out of date and no longer counts as"
+              " built: run calibrate_paragraphs.py and tier1_fill.py again")
     print("\nregistry: corpus %s; built_tiers %s" % (den, fld.built_tiers()))
     r = fld.run("lit", "check_drift.py", check=False, show=False)
     bad = [l for l in r.stdout.splitlines() if "FAIL" in l]
@@ -139,7 +164,8 @@ def main():
         print("  " + l.strip())
     if r.returncode != 0:
         sys.exit(1)
-    print("\nNEXT: py -3 %s %s" % (os.path.join(F.HERE, "calibrate_paragraphs.py"), a.field))
+    print("\nNEXT: %s %s %s%s" % (F.PY, os.path.join(F.HERE, "calibrate_paragraphs.py"), fld.field,
+                                  F.dest_arg(a.dest)))
 
 
 def index_paths(fld):

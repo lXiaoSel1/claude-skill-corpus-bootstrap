@@ -129,11 +129,36 @@ def headwords_re():
     return cp.as_str(_DATA.get("headwords"))
 
 
+def project_root():
+    """The project folder when this skill sits in <project>/.claude/skills/,
+    else None (a user-level ~/.claude/skills install has no project)."""
+    skills = os.path.dirname(SKILL)
+    dot = os.path.dirname(skills)
+    if os.path.basename(skills) == "skills" and os.path.basename(dot) == ".claude":
+        return os.path.dirname(dot)
+    return None
+
+
+def resolve_path(p):
+    """A path from field-config.yaml: absolute as written; relative only to the
+    project root, and an error when there is no project to be relative to."""
+    if not p:
+        return ""
+    p = os.path.expanduser(p)
+    if os.path.isabs(p):
+        return os.path.normpath(p)
+    root = project_root()
+    if root is None:
+        sys.exit("relative path %r in field-config.yaml: this skill is not inside a project's"
+                 " .claude/skills, so write the absolute path" % p)
+    return os.path.normpath(os.path.join(root, p))
+
+
 def manuscript_paths():
-    """(manuscript_tex, manuscript_tables) -- absolute or relative to the
-    project root; empty strings before manuscript onboarding."""
-    return (cp.as_str(_DATA.get("manuscript_tex")),
-            cp.as_str(_DATA.get("manuscript_tables")))
+    """(manuscript_tex, manuscript_tables), resolved by resolve_path; empty
+    strings before manuscript onboarding."""
+    return (resolve_path(cp.as_str(_DATA.get("manuscript_tex"))),
+            resolve_path(cp.as_str(_DATA.get("manuscript_tables"))))
 
 
 def canon_dir():

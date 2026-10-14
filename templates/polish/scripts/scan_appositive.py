@@ -14,7 +14,7 @@ import _rp
 
 ctx = _rp.Ctx(sys.argv)
 first = _rp._pop(ctx.args, "--first")
-CITE = re.compile(r"\\(cite(?!text)[a-zA-Z]*)\*?(?:\[[^\]]*\]){0,2}\{([^}]+)\}")
+CITE = _rp.CITE_ANY_RE
 CITETEXT = re.compile(r"\\citetext\{((?:[^{}]|\{[^{}]*\})*)\}")
 COMMENT = re.compile(r"(?<!\\)%.*$", re.M)
 PAT = re.compile(r",\s+((?:a|an|the|one|both|each|this|these|which)\s+[^,;.]{0,90})")

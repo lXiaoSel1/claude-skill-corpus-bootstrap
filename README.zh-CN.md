@@ -10,7 +10,7 @@
 - **`<field>-draft`**：一次起草一段。每一段都沿用语料里至少两篇论文用过的结构（叫作一个 “Version”）。每个论断在写成句子之前，必须先在台账里登记一行，贴上出处原文。它还能给写好的章节做反向提纲（`--outline`），也能把引言或摘要里的论断追溯到支撑它的表格（`--trace`）。
 - **`<field>-polish`**：在你自己的 `main.tex` 上一节一节改稿。它对照语料扫描全文，到被引论文的 PDF 里核对少见的词，把每一句改过的论断对回原文，最后编译稿件并把这一节渲染成可读文本。章节和每个引用对应的 PDF 都由它自己找，不用填配置文件。
 
-**一键接入**：给它一份稿件和你的文献库（PDF 文件夹、Zotero 或 JabRef 导出的 `.bib`，或者 PDF 加阅读笔记），它会把每个引用对到 PDF，并一口气跑完第 0、1 关。
+**一键接入**：给它一份 LaTeX 稿件和你的文献库（PDF 文件夹、Zotero 或 JabRef 导出的带文件路径的 `.bib`，或者 PDF 加阅读笔记），它会把每个引用对到 PDF，并一口气跑完第 0、1 关。
 
 所有数字都不从别的领域照搬：术语频次、段落长度、衔接常模、章节分类、引述他人结论时用的动词阶梯，全部在你自己的语料上重新测量。
 
@@ -195,12 +195,12 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 ### 一键接入
 
-从一份稿件开始时，`/corpus-bootstrap polish` 会依次运行下面的脚本。每个默认决定都会列成表打印出来，你可以改了再重跑。
+从一份稿件开始时，`/corpus-bootstrap polish` 会依次运行下面的脚本。每个默认决定都会列成表打印出来。要改第 0 关的决定，先改两份 `field-config.yaml` 里的清单，再运行 `tier0_accept.py <field> --keep-config`；要定死段落阈值，运行 `calibrate_paragraphs.py <field> --set N`。不加这两个参数直接重跑，会重新算出默认值。
 
 | 步 | 脚本 | 做什么 |
 |---|---|---|
 | 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的引用、有多个候选的引用、重复的版本和不是英文的 PDF。生成这个领域的 skill（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
-| 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，报告和书只用于查术语，篇幅很短的研究条目排除 |
+| 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，书和手册只用于查术语，工作论文和预印本算作研究论文（篇幅很短的除外），篇幅很短的研究条目排除 |
 | 3 | `calibrate_paragraphs.py` | 在 80 到 400 个字符之间扫描，选出这份语料的段落长度阈值 |
 | 4 | `tier1_fill.py` | 建好文风层，并填上第 1 关要求的所有数字和判定，`check_drift` 不用手改就能通过 |
 | 5 | （Claude） | 用 `<field>-lit` 审你稿件里的一段，把结果给你看 |
@@ -253,17 +253,24 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 - Claude Code（几轮阅读要用子代理）
 - Python 3.8 或更高
-- **PyMuPDF**（`pip install pymupdf`）。请当作必装：没有它（也没有 pypdf）时，页数会记成 0，扫描件也就检测不出来。
-- Poppler 的 **`pdftotext`**，放在 PATH 上，或在 `field-config.yaml` 里写明路径
+- **PyMuPDF**（`py -3 -m pip install pymupdf`）。请当作必装：没有它，提取后双栏串行的论文就没法重新提取；没有它也没有 pypdf 时，页数只能从 `pdftotext` 的输出里数。
+- Poppler 的 **`pdftotext`**，推荐安装：放在 PATH 上，或在 `field-config.yaml` 里写明路径。没有它时改用 PyMuPDF 转换；自检需要 `pdftotext`。Windows 上 MiKTeX 和 Git for Windows 各自带有一个。
+- 一键接入和 `<field>-polish`：稿件必须是 **LaTeX**（natbib 或 biblatex 引用）。不支持 Word 和 Markdown 稿件。
 - `<field>-polish` 的第 i 步：一套 TeX，含 `pdflatex` 或 `xelatex`，以及 `bibtex` 或 `biber`
 - 可选：PyYAML、pypdf
 
-文档里用的是 Windows 的 `py -3`，macOS 和 Linux 请换成 `python3`。
+文档里用的是 Windows 的 `py -3`，macOS 和 Linux 请换成 `python3`（以及 `python3 -m pip`）。
 
 ## 安装
 
 ```bash
 git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap ~/.claude/skills/corpus-bootstrap
+```
+
+Windows PowerShell 不会展开这条命令里的 `~`，在 PowerShell 里请用：
+
+```powershell
+git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap "$HOME/.claude/skills/corpus-bootstrap"
 ```
 
 文件夹必须叫 `corpus-bootstrap`。生成的 skill 默认放在它旁边，即同一个 `skills/` 目录下，也可以用 `--dest` 指定位置。放在项目自己的 `.claude/skills/` 里也可以。
@@ -278,27 +285,31 @@ cd ~/.claude/skills/corpus-bootstrap
 # 1. 为这个领域生成三个 skill
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
-# 2. 转换 PDF：放进 ../ecology-lit/drop/，或者直接读你文献库里的原位置
+# 2. 转换 PDF，直接读你文献库里的原位置
+#    （也可以复制到 ../ecology-lit/drop/，然后去掉 --src）
 py -3 scripts/ingest.py ../ecology-lit --src "/path/to/your/pdfs" --recursive
 
-# 3. 生成语料清单，然后审阅
+# 3. 生成语料清单（../ecology-lit/references/corpus_meta.yaml），看一下里面的标记
 py -3 ../ecology-lit/scripts/build_corpus_meta.py
 
-# 4. 查看已经建好哪几关，以及下一关的成本
+# 4. 按默认决定验收第 0 关（扫描件排除，很短的文档只用于查术语）
+py -3 scripts/tier0_accept.py ecology
+
+# 5. 查看已经建好哪几关，以及下一关的成本
 py -3 scripts/tier_status.py ecology
 ```
 
-然后在 Claude Code 里请它进行下一关，例如 `/corpus-bootstrap tier 1`。随时可以中断后接着做，`tier_status.py` 会读取进度台账。
+第 1 关再跑两个脚本：先 `py -3 scripts/calibrate_paragraphs.py ecology`，再 `py -3 scripts/tier1_fill.py ecology`。第 2–4 关在 Claude Code 里请它做，例如 `/corpus-bootstrap tier 2`。随时可以中断后接着做，`tier_status.py` 会从各 skill 的 registry 里读出已经建好的关。
 
-`--citation-style` 可选 `author-year`、`numeric` 或 `mixed`。`--keywords` 会写进新 skill 的触发说明。
+`--citation-style` 可选 `author-year`、`numeric` 或 `mixed`。`--keywords` 会写进新 skill 的触发说明。如果生成时用了 `--dest <文件夹>`，之后 `scripts/` 里的每个脚本都要带上同样的 `--dest`。
 
 **也可以从一份稿件和你的文献库开始。** 在 Claude Code 里说 `/corpus-bootstrap polish` 并给出路径，Claude 会依次跑下面几步，到第 2 关之前先问你。手动运行：
 
 ```bash
-# 1. 把每个引用对到 PDF，生成这个领域的 skill 并导入语料
-#    （不加 --field 会停下来问领域名；--dry-run 只建索引）
-py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs \
-    --library /path/to/library.bib --field ecology --keywords "population ecology, habitat loss"
+# 1. 把每个引用对到 PDF，生成这个领域的 skill 并导入语料。写成一行，
+#    bash、PowerShell、cmd 里都能用（不加 --field 会停下来问领域名；
+#    --dry-run 只建索引；--notes 可以不给）
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
 
 # 2. 第 0 关验收、段落阈值、第 1 关
 py -3 scripts/tier0_accept.py ecology
@@ -309,7 +320,11 @@ py -3 scripts/tier1_fill.py ecology
 py -3 scripts/onboard.py --finish --field ecology
 ```
 
-之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。用 1.1.0 生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
+之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。1.2.0 之前生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
+
+阅读笔记（`--notes`）是 Markdown 文件，每篇论文一个，文件名用引用 key（`Smith2019.md`）。在开头附近写一行 `pdf: ../pdfs/smith-2019.pdf`，就把笔记和 PDF 对上了（相对路径从笔记所在的文件夹算起）。polish 第 e 步的 `note_terms.py` 读的是同一行带页码的引文，例如 `- "medical spending rose after the reform" (p.4)`。
+
+一键接入和 `<field>-polish` 会把工作文件放在 `main.tex` 旁边的 `.polish/` 文件夹里：文献索引、快照和备份。请把 `.polish/` 加进稿件的 `.gitignore`，或者不让它同步到 Overleaf。
 
 **论文由你自己下载。** 这个 skill 不抓取、不爬网页，也不调用任何 API。请不要把 PDF 和语料文本放进公开仓库。
 
@@ -343,9 +358,9 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 
 **手动做。**
 
-1. 把每篇存成 UTF-8 文本，文件名用 `<key>.txt`，放进同一个文件夹，并在这个文件夹的 `_manifest.md` 里登记。默认文件夹是 `references/canon-sources/`。想让每个领域用各自的一套，就把这个领域两份 `field-config.yaml`（`-lit` 和 `-draft` 各一份）里的 `canon_dir` 都改成另一个文件夹。
-2. 到第 4 关时，在 `-draft` skill 的 `references/registry.json` 里，`canon_sources` 下填上指南的文件数（`count`）和三四句逐字摘录（`spot_quotes`）。`check_drift` 会在文件里逐句查找这些摘录。
-3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。可以从 `templates/draft/references/` 里的骨架开始写，引文用 `check_canon_quotes.py` 核对。
+1. 把每篇存成 UTF-8 文本，文件名用 `<key>.txt`，放进同一个文件夹，并在这个文件夹的 `_manifest.md` 里登记。不改的话，`canon_dir` 指向工厂自己的 `corpus-bootstrap/references/canon-sources/`（`canon_ingest.py` 用的则是 `-draft` skill 里的文件夹）。想用别的文件夹，就把这个领域两份 `field-config.yaml`（`-lit` 和 `-draft` 各一份）里的 `canon_dir` 都改过去。
+2. 到第 4 关时，在 `-draft` skill 的 `references/registry.json` 里，`canon_sources` 下填上指南的文件数和至少三句逐字摘录（指南不到三篇时可以少于三句），摘录按文件名登记：`"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "从这个文件里原样复制的一句话"}}`。`check_drift` 会到对应文件里逐句查找这些摘录。
+3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。可以从 `templates/draft/references/` 里的骨架开始写。`check_drift` 还要求文件里写到 `canon-sources`，并给还没测量的规则标上 `TO-MEASURE`；引文用 `check_canon_quotes.py` 核对。
 
 ## 自检
 
@@ -353,22 +368,32 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 py -3 tests/run_selftest.py
 ```
 
-共 119 项检查，分四部分：
+共 135 项检查，分五部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
-3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
+3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 除 `compile.py`（它需要 TeX）以外的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
 4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
+5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
+
+## 疑难排解
+
+- **论文被标成 SCAN、SHORT 或 INTERLEAVED。** SCAN 表示 PDF 没有文字层：做一遍 OCR 再导入，或者就让它排除。SHORT 往往是只存下了摘要或网页：去下载全文。INTERLEAVED 表示两栏被交错读到了一起：用原来的 `--src` 或 `--map` 再跑一次 `ingest.py`，加上 `--force KEY --converter pymupdf`（装了 PyMuPDF 时，`tier0_accept.py` 会替你做）。
+- **`stamp.py` 拒绝覆盖。** 生成的 skill 里存着测量结果。想从头来，请自己删掉这个领域的三个文件夹。
+- **脚本找不到这个领域。** 如果生成时用了 `--dest`，就再带上同样的 `--dest`。
+- **找到了两个不同的 `pdftotext`。** Windows 上 PowerShell 和 Git Bash 可能各找到一个（比如 MiKTeX 的和 Git 的）。在两份 `field-config.yaml` 里用 `pdftotext:` 固定一个。
+- **改过的 `field-config.yaml` 读出来不对。** 请存成 UTF-8。Windows PowerShell 5.1 的 `Set-Content` 不加 `-Encoding utf8` 时，会按系统代码页写入。
+- **`onboard.py` 以退出码 3 停下。** 它需要领域名，新领域还需要主题关键词：加上 `--field <名字> --keywords "..."` 再跑一次。退出码 2 表示出错，提示信息会说明怎么改。
 
 ## 已知限制
 
 - **第 4 关的写作指南要你自己找。** 第 0–3 关不需要额外文件就能完整运行。第 4 关还需要你所在领域的写作指南（见 [第 4 关需要的写作指南](#第-4-关需要的写作指南)）。skill 会转换这些指南，并从骨架起草 `structure-canon.md`，但不会替你找指南。骨架里的规则来自最初那次搭建用的经济学指南，起草这一步也只在这些指南上实测过；换一个领域，没有出处的规则可能会更多。
 - **只支持英文语料。** 分句、词表和各项测量都以英文为前提。
 - **以 Windows 为主。** 文档和提示信息默认用 `py -3`，脚本本身跨平台。
-- **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径，因为有两个脚本解析相对路径的方式不同。
-- **可选模式需要仓库里没有的 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`。两者默认都关闭。
+- **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径（一键接入就是这样写的）。只有 skill 装在 `<项目>/.claude/skills/` 下时，相对路径才按项目文件夹解析；装在别处时，脚本会停下来要求写绝对路径。
+- **部分可选步骤会用到仓库里没有的 skill 或 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`，两者默认都关闭。polish 的 f 步装了 `humanizer` skill 就用它，没有就用仓库自带的 `references/humanizer-G.md`。各 skill 还会建议下一步用别的 skill（`/proofread`、`/review-paper`、`/verify-claims`、`/seven-pass-review`、`/audit-reproducibility`），这些都不是必需的。
 - **`<field>-polish` 还有已知的缺口。** 它第一次完整运行（2026-10-14）时每一步都走完了，检查也都通过，同时暴露了一些还没修的问题：
   - c 步要用到 e 步对原文术语的结论，而 c 步的改动又必须在 d、d2 读文件之前写进去；
   - 一次性框架（L2b）的清单很长，大多是普通的语法组合；
@@ -381,13 +406,17 @@ py -3 tests/run_selftest.py
 
 ```
 SKILL.md                    Claude Code 加载的 skill
+CHANGELOG.md                各版本改了什么
+CITATION.cff                引用本仓库的格式
+CONTRIBUTING.md             怎么报告问题、怎么提交修改
+.github/ISSUE_TEMPLATE/     报告 bug 和提问的表单
 scripts/                    stamp、ingest、capture、tier_status；onboard、tier0_accept、
                             calibrate_paragraphs、tier1_fill（一键接入）；
                             canon_ingest（第 4 关的写作指南）
 templates/lit/              <field>-lit 的骨架
 templates/draft/            <field>-draft 的骨架，含结构准则的骨架
 templates/polish/           <field>-polish 的骨架：a-j 步骤、脚本、可选设置示例
-templates/field-config.yaml 两个 skill 共用的领域配置
+templates/field-config.yaml -lit 和 -draft 读的领域配置（-polish 读 -lit 那份）
 templates/prompts/          各轮阅读和起草结构准则的提示词，及格式示例
 references/                 搭建来历、一份存档的（未实现的）文献抓取调研、写作指南清单
 tests/run_selftest.py       自检
@@ -396,6 +425,6 @@ docs/images/                README 用到的截图
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.3.0（2026-10-14）。
+MIT，见 [LICENSE](LICENSE)。版本 1.3.1（2026-10-14）。
 
 作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

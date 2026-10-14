@@ -37,8 +37,8 @@ HISTORY (factory, health-policy instance Tier 4, 2026-10-07)
       in the same act, since check_drift asserts the two agree.
 
 RUN
-    py scripts/measure_verbs.py            # print the table
-    py scripts/measure_verbs.py --write    # ... rewrite verb-ladder.md + registry
+    py -3 scripts/measure_verbs.py            # print the table
+    py -3 scripts/measure_verbs.py --write    # ... rewrite verb-ladder.md + registry
 """
 import glob
 import io
@@ -54,10 +54,11 @@ if hasattr(sys.stdout, "reconfigure"):
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.normpath(os.path.join(HERE, ".."))
 
-# The corpus lives in the -lit sibling; the ladder lives in -draft.
-_name = os.path.basename(SKILL)
-_field = _name[:-6] if _name.endswith("-draft") else _name
-LIT = os.path.normpath(os.path.join(SKILL, "..", _field + "-lit"))
+# The corpus lives in the -lit sibling (field-config's lit_instance, like
+# every other draft script); the ladder lives in -draft.
+sys.path.insert(0, os.path.join(SKILL, "pipeline"))
+import _jobs  # noqa: E402
+LIT = os.path.normpath(_jobs.lit_dir())
 CORPUS = os.path.join(LIT, "references", "corpus")
 META = os.path.join(LIT, "references", "corpus_meta.yaml")
 OUT = os.path.join(SKILL, "references", "verb-ladder.md")
@@ -67,7 +68,7 @@ REG = os.path.join(SKILL, "references", "registry.json")
 sys.path.insert(0, os.path.join(LIT, "scripts"))
 try:
     import textseg  # noqa: E402
-except ImportError:  # pragma: no cover -- lit sibling missing
+except ImportError:  # checked when the corpus is read (the module stays importable)
     textseg = None
 
 MIN_RANGE = 3      # a verb in fewer papers than this is not this field's verb
@@ -148,6 +149,9 @@ def style_safe_ids():
 
 
 def load():
+    if textseg is None:   # without it reference lists would be counted as prose
+        sys.exit("measure_verbs: cannot import textseg from %s/scripts -- check lit_instance"
+                 " in field-config.yaml" % LIT)
     ids = style_safe_ids()
     out = {}
     for f in sorted(glob.glob(os.path.join(CORPUS, "*.txt"))):
@@ -155,7 +159,7 @@ def load():
         if ids is not None and k not in ids:
             continue
         s = io.open(f, encoding="utf-8", errors="replace").read()
-        out[k] = (textseg.clean_prose(s) if textseg else s).lower()
+        out[k] = textseg.clean_prose(s).lower()
     return out
 
 
@@ -218,7 +222,7 @@ def write(rows, prows, n_papers, words):
          "> 来源：`../%s-lit/references/corpus/`，"
          "**%d 篇 style-safe**，{:,} 词。".format(words)
          % (_field, n_papers),
-         "> 生成：`py scripts/measure_verbs.py --write`。"
+         "> 生成：`py -3 scripts/measure_verbs.py --write`。"
          "**这个文件不手写**——"
          "母本的阶梯是手工 grep 出来的，",
          "> 三处词频因此写错，其中 "
@@ -304,7 +308,7 @@ def write(rows, prows, n_papers, words):
           "它的数字大半属于同形名词，"
           "要读语境行才知道动词用法"
           "有多少。",
-          "4. 复算：`py scripts/measure_verbs.py`。"
+          "4. 复算：`py -3 scripts/measure_verbs.py`。"
           "数字变了就重写这个文件"
           "，不要手改。", ""]
 

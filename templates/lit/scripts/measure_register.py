@@ -24,8 +24,8 @@ THE NOUN/VERB COLLISION
     statistic measured its own opposite.
 
 RUN
-    py scripts/measure_register.py
-    py scripts/measure_register.py --scope term
+    py -3 scripts/measure_register.py
+    py -3 scripts/measure_register.py --scope term
 """
 import argparse
 import os
@@ -119,7 +119,7 @@ def load_scope(scope):
     """Paper ids for the requested scope, read from the manifest."""
     if not os.path.exists(META):
         sys.exit("missing references/corpus_meta.yaml"
-                 "\n  fix: py scripts/build_corpus_meta.py")
+                 "\n  fix: py -3 scripts/build_corpus_meta.py")
     field = "style_safe" if scope == "style" else "terminology_safe"
     ids, cur = [], None
     with open(META, encoding="utf-8") as fh:

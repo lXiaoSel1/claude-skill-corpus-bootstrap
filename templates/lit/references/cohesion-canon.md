@@ -20,7 +20,7 @@
 > `refuted` and stays out of the checker. The adjudication numbers come from
 > `cohesion-norms.json` (149 style-safe papers, 9,821 recovered paragraphs,
 > **57,271 adjacent sentence pairs**); rebuild with
-> `py scripts/build_cohesion_norms.py`.
+> `py -3 scripts/build_cohesion_norms.py`.
 >
 > Tags: **[M]** mechanical (scripts/cohesion.py computes it) · **[P]**
 > positional (script supplies the zones, the review judges) · **[S]** semantic

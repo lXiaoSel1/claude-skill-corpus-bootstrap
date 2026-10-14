@@ -28,6 +28,9 @@ Rules:
    from position/structure. Never guess silently — `M` is the flag.
 4. Emit STRICT TSV, one row per candidate, no header, exactly:
    `paper-key<TAB>L<line><TAB>job[,job]<TAB>H|M<TAB>one-line reason`
+   Write it to `pipeline/a2_out_wave{k}.tsv` in the {field}-draft skill: build_map,
+   build_names and stage_b_slice read only files with these exact names, and a
+   file named otherwise is silently left out of the map.
 5. Every candidate in the input gets a row. No skips, no additions.
 6. **Structured-abstract labels are not chapters.** A line that is only
    `BACKGROUND`, `METHODS`, `RESULTS`, `CONCLUSIONS`, `Objective(s)`,
@@ -45,6 +48,9 @@ Rules:
 - `retag`: all OTHER-tagged headings re-examined in one pass (did a new job
   hide inside OTHER? — this is how the parents found `model`).
 - `gap` / `delta`: headings the first pass missed or mis-lined.
+- `zfix`: single verdicts the A3 gate (below) shows to be wrong, checked by line.
+- Each round writes the same TSV format to `pipeline/a2_out_retag.tsv`,
+  `a2_out_gap.tsv`, `a2_out_delta.tsv` or `a2_out_zfix.tsv` (exact names).
 - Merge order matters and is enforced by build_map: waves first, corrections
   last, so later verdicts override earlier ones.
 

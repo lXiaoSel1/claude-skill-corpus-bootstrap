@@ -19,6 +19,11 @@ SKILL = os.path.dirname(HERE)
 TEMPLATES = os.path.join(SKILL, "templates")
 DEFAULT_DEST = os.path.dirname(SKILL)
 TODAY = datetime.date.today().isoformat()
+# the launcher the printed hints name: Windows has the py launcher, macOS and
+# Linux have python3
+PY = "py -3" if os.name == "nt" else "python3"
+# a field slug: lowercase ASCII letters and digits, single hyphens between
+SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def die(msg, code=2):
@@ -26,12 +31,30 @@ def die(msg, code=2):
     sys.exit(code)
 
 
+def norm_field(field):
+    """The slug stamp.py writes: trimmed and lowercased."""
+    return (field or "").strip().lower()
+
+
+def user_path(p):
+    """A path argument as the user typed it: ~ expanded (PowerShell and cmd do not)."""
+    return os.path.abspath(os.path.expanduser(p)) if p else p
+
+
+def dest_arg(dest):
+    """' --dest "<dest>"' for a printed next command, or '' for the default."""
+    if not dest or os.path.normcase(user_path(dest)) == os.path.normcase(DEFAULT_DEST):
+        return ""
+    return ' --dest "%s"' % user_path(dest)
+
+
 class Field(object):
     """A stamped field: <dest>/<field>-lit, -draft, -polish."""
 
     def __init__(self, field, dest=None):
+        field = norm_field(field)
         self.field = field
-        self.dest = os.path.abspath(dest or DEFAULT_DEST)
+        self.dest = user_path(dest or DEFAULT_DEST)
         self.lit = os.path.join(self.dest, field + "-lit")
         self.draft = os.path.join(self.dest, field + "-draft")
         self.polish = os.path.join(self.dest, field + "-polish")
@@ -103,6 +126,12 @@ class Field(object):
                 self.update_registry(which, lambda r: r.__setitem__(
                     "built_tiers", sorted(set(int(t) for t in r.get("built_tiers", [])) | {tier})))
 
+    def drop_tier(self, tier):
+        for which in ("lit", "draft"):
+            if os.path.isfile(self.registry(which)):
+                self.update_registry(which, lambda r: r.__setitem__(
+                    "built_tiers", sorted(set(int(t) for t in r.get("built_tiers", [])) - {tier})))
+
     def built_tiers(self):
         try:
             with open(self.registry("lit"), encoding="utf-8") as fh:
@@ -141,7 +170,8 @@ def run(cmd, cwd=None, check=True, show=True):
     if show and r.stdout.strip():
         print("\n".join("    | " + l for l in r.stdout.rstrip().splitlines()))
     if check and r.returncode != 0:
-        die("FAILED (exit %d): %s\n%s" % (r.returncode, " ".join(os.path.basename(c) for c in cmd[1:3]),
+        shown = [c for c in cmd[1:] if c != "-B"][:2]
+        die("FAILED (exit %d): %s\n%s" % (r.returncode, " ".join(os.path.basename(c) for c in shown),
                                           (r.stderr or r.stdout)[-1500:]))
     return r
 

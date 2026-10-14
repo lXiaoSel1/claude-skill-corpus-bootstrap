@@ -18,8 +18,8 @@ WHY THIS EXISTS
         shard reports, so the published counts cannot disagree with the file.
 
 RUN
-    py scripts/build_exemplars.py              # verify + report, write nothing
-    py scripts/build_exemplars.py --write      # ... and write exemplars.md
+    py -3 scripts/build_exemplars.py              # verify + report, write nothing
+    py -3 scripts/build_exemplars.py --write      # ... and write exemplars.md
 """
 import glob
 import io
@@ -185,7 +185,7 @@ def main():
     L = ["# exemplars.md — move-tagged sentences from the corpus", "",
          "> %d sentences across %d papers, tagged with the 8 shared move labels."
          % (total, len(sections)),
-         "> Built by `py scripts/build_exemplars.py --write` from "
+         "> Built by `py -3 scripts/build_exemplars.py --write` from "
          "`references/_exemplar_shards/`.",
          "> **Every sentence is verbatim**, PDF-extraction damage included; a "
          "sentence that had to be",

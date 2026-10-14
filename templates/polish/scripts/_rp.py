@@ -68,7 +68,8 @@ INT_KEYS = {"max_sentences", "uniform_run", "min_words",
             "opener_max_lead_words"}
 
 COMMENT_RE = re.compile(r"(?<!\\)%.*$")
-CITE_KEYS_RE = re.compile(r"\\cite(?!text)[a-zA-Z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]+)\}")
+CITE_KEYS_RE = _msmod.CITE_KEYS_RE     # natbib and biblatex commands (manuscript.py)
+CITE_ANY_RE = _msmod.CITE_ANY_RE
 _LABEL_ONLY = re.compile(r"^\s*\\label\{[^}]*\}\s*$")
 
 
@@ -185,10 +186,18 @@ class Ctx(object):
         if not v:
             die("no manuscript: pass --manuscript <main.tex>, or run the onboarding\n"
                 "(/corpus-bootstrap polish) which records it in the field-config.")
-        for base in (os.getcwd(), os.path.normpath(os.path.join(SKILL, "..", "..", ".."))):
-            p = _abs(v, base)
-            if os.path.isfile(p):
-                return p
+        # same rule as the -lit and -draft skills: absolute as written; relative
+        # only to the project when this skill sits in <project>/.claude/skills
+        v = os.path.expanduser(v)
+        if not os.path.isabs(v):
+            skills = os.path.dirname(SKILL)
+            if not (os.path.basename(skills) == "skills"
+                    and os.path.basename(os.path.dirname(skills)) == ".claude"):
+                die("manuscript_tex %r in the field-config is relative and this skill is not"
+                    " inside a project's .claude/skills: write the absolute path" % v)
+            v = _abs(v, os.path.dirname(os.path.dirname(skills)))
+        if os.path.isfile(v):
+            return v
         die("manuscript_tex in the field-config does not exist: " + v)
 
     @property

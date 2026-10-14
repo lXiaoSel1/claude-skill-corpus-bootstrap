@@ -62,8 +62,27 @@ def para_min_chars():
         return 150
 
 
+def project_root():
+    """The project folder when this skill sits in <project>/.claude/skills/,
+    else None (a user-level ~/.claude/skills install has no project)."""
+    skills = os.path.dirname(SKILL)
+    dot = os.path.dirname(skills)
+    if os.path.basename(skills) == "skills" and os.path.basename(dot) == ".claude":
+        return os.path.dirname(dot)
+    return None
+
+
 def manuscript_tex():
-    return cp.as_str(_DATA.get("manuscript_tex"))
+    """manuscript_tex: absolute as written; relative only to the project root,
+    and an error when there is no project (same rule as the -draft skill)."""
+    p = os.path.expanduser(cp.as_str(_DATA.get("manuscript_tex")))
+    if not p or os.path.isabs(p):
+        return os.path.normpath(p) if p else ""
+    root = project_root()
+    if root is None:
+        sys.exit("relative manuscript_tex %r in field-config.yaml: this skill is not inside a"
+                 " project's .claude/skills, so write the absolute path" % p)
+    return os.path.normpath(os.path.join(root, p))
 
 
 def pdftotext_path():

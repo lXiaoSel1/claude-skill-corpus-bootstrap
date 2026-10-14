@@ -43,7 +43,6 @@ RUN
 import argparse
 import csv
 import datetime
-import glob
 import hashlib
 import json
 import os
@@ -56,7 +55,10 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-SCAN_WPP = 60        # words per page below this: image-only / scan
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _factory as F  # noqa: E402  (launcher name for the printed hints)
+
+SCAN_WPP = 60       # words per page below this: image-only / scan
 SHORT_WORDS = 1500   # readable but short: abstract-only, slides, brief
 BAD_SHARE = 0.005    # replacement-character share flagged as damage
 KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]*$")
@@ -99,7 +101,7 @@ def converter(cfg, choice="auto"):
         try:
             import fitz  # PyMuPDF
         except ImportError:
-            sys.exit("--converter pymupdf: PyMuPDF not installed (pip install pymupdf)")
+            sys.exit("--converter pymupdf: PyMuPDF not installed (%s -m pip install pymupdf)" % F.PY)
         return ("pymupdf", fitz.__file__, getattr(fitz, "VersionBind", "?"))
     pinned = cfg.pdftotext_path()
     exe = pinned or shutil.which("pdftotext")
@@ -117,10 +119,12 @@ def converter(cfg, choice="auto"):
     except ImportError:
         sys.exit("neither pdftotext nor PyMuPDF available"
                  "\n  fix: pin pdftotext in field-config.yaml or"
-                 " pip install pymupdf")
+                 " %s -m pip install pymupdf" % F.PY)
 
 
-def page_count(pdf):
+def page_count(pdf, text=None):
+    """Pages of a PDF: PyMuPDF, else pypdf, else the form feeds pdftotext
+    writes after every page (text = its output), else 0."""
     try:
         import fitz
         with fitz.open(pdf) as doc:
@@ -131,7 +135,27 @@ def page_count(pdf):
         from pypdf import PdfReader
         return len(PdfReader(pdf).pages)
     except Exception:
-        return 0
+        pass
+    return text.count("\f") if text else 0
+
+
+def qc(text, pages):
+    """(words, words_per_page, flags) for one corpus text."""
+    import textseg
+    words = len(text.split())
+    wpp = round(words / pages, 1) if pages else None
+    flags = []
+    if pages >= 2 and wpp < SCAN_WPP:
+        # one page of little text is a short document, not a scan
+        flags.append("SCAN")
+    elif words < SHORT_WORDS:
+        flags.append("SHORT")
+    if text and text.count("�") / max(len(text), 1) > BAD_SHARE:
+        flags.append("REPLACEMENT")
+    ratio, nl = textseg.interleave_ratio(text)
+    if nl >= textseg.INTERLEAVE_MIN_LINES and ratio >= textseg.INTERLEAVE_MIN:
+        flags.append("INTERLEAVED")
+    return words, wpp, flags
 
 
 def convert(conv, pdf, txt):
@@ -169,9 +193,14 @@ def collect(inst, args):
         return items
     roots = args.src or [os.path.join(inst, "drop")]
     for root in roots:
-        pat = os.path.join(root, "**", "*.pdf") if args.recursive \
-            else os.path.join(root, "*.pdf")
-        for p in sorted(glob.glob(pat, recursive=args.recursive)):
+        # walked, not globbed: a folder named "Papers [2024]" is not a pattern,
+        # and ".PDF" counts on case-sensitive file systems too
+        root = F.user_path(root)
+        if args.recursive:
+            found = [os.path.join(d, f) for d, _, fs in os.walk(root) for f in fs]
+        else:
+            found = [os.path.join(root, f) for f in os.listdir(root)] if os.path.isdir(root) else []
+        for p in sorted(p for p in found if p.lower().endswith(".pdf") and os.path.isfile(p)):
             items.append({"key": keyify(p), "path": os.path.abspath(p),
                           "group": "", "role": "", "note": ""})
     return items
@@ -212,11 +241,13 @@ def main():
     for it in items:
         if not KEY_RE.match(it["key"]):
             bad_keys.append(it["key"])
-        if it["key"] in seen:
+        # ignoring case: Smith2020.txt and smith2020.txt are one file on
+        # Windows and macOS
+        if it["key"].lower() in seen:
             sys.exit("key collision: %s <- %s AND %s\n  fix: rename one or"
                      " give explicit keys with --map"
-                     % (it["key"], seen[it["key"]], it["path"]))
-        seen[it["key"]] = it["path"]
+                     % (it["key"], seen[it["key"].lower()], it["path"]))
+        seen[it["key"].lower()] = it["path"]
         if not os.path.exists(it["path"]):
             sys.exit("missing source for %s: %s" % (it["key"], it["path"]))
     if bad_keys:
@@ -226,6 +257,10 @@ def main():
     if os.path.exists(manifest_path):
         with open(manifest_path, encoding="utf-8") as fh:
             manifest = json.load(fh)
+
+    def save():
+        with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(manifest, fh, ensure_ascii=False, indent=1, sort_keys=True)
 
     print("converter: %s  %s  (%s)" % conv)
     print("%d sources%s" % (len(items), "  [dry run]" if args.dry_run else ""))
@@ -240,11 +275,24 @@ def main():
         explicit = key in args.force
         if exists and not explicit and (hand or not args.force_all):
             note = "kept (hand-repaired)" if hand else "kept"
-            if not prev:  # pre-manifest txt: adopt without converting
-                prev = {"source": src, "converter": "unknown (pre-manifest)"}
+            if not prev:
+                # a txt with no record (a run stopped part-way, or written by
+                # hand): adopt it, but with the same QC a conversion gets
+                with open(txt, encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+                pages = 0 if src.lower().endswith(".txt") else page_count(src, text)
+                words, wpp, flags = qc(text, pages)
+                prev = {"source": src, "source_sha256": sha256(src),
+                        "converter": "unknown (adopted)", "pages": pages, "words": words,
+                        "words_per_page": wpp, "flags": flags, "txt_sha256": sha256(txt)}
+                note = "adopted %s" % " ".join(flags) if flags else "adopted"
+                if flags:
+                    flagged.append(key)
             prev.update({k: it[k] for k in ("group", "role", "note") if it[k]})
             manifest[key] = prev
             print("%-28s %s" % (key, note))
+            if not args.dry_run:
+                save()
             continue
         if args.dry_run:
             print("%-28s would convert  %s" % (key, src))
@@ -261,28 +309,18 @@ def main():
             else:
                 convert(conv, src, txt)
                 rec.update(converter=conv[0], converter_path=conv[1],
-                           converter_version=conv[2], pages=page_count(src))
+                           converter_version=conv[2])
             with open(txt, encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
-            words = len(text.split())
-            pages = rec["pages"]
-            wpp = round(words / pages, 1) if pages else None
-            flags = []
-            if pages >= 2 and wpp < SCAN_WPP:
-                # one page of little text is a short document, not a scan
-                flags.append("SCAN")
-            elif words < SHORT_WORDS:
-                flags.append("SHORT")
-            if text and text.count("�") / max(len(text), 1) > BAD_SHARE:
-                flags.append("REPLACEMENT")
-            ratio, nl = textseg.interleave_ratio(text)
-            if nl >= textseg.INTERLEAVE_MIN_LINES and ratio >= textseg.INTERLEAVE_MIN:
-                flags.append("INTERLEAVED")
+            if "pages" not in rec:
+                rec["pages"] = page_count(src, text)
+            words, wpp, flags = qc(text, rec["pages"])
             rec.update(words=words, words_per_page=wpp, flags=flags,
                        txt_sha256=sha256(txt))
         except Exception as e:  # one bad file never stops the batch
             rec.update(flags=["ERROR"], error=str(e)[:200])
         manifest[key] = rec
+        save()   # after every file: a run stopped part-way keeps its records
         if rec.get("flags"):
             flagged.append(key)
         print("%-28s %-12s %8s words %6s w/p  %s"
@@ -293,8 +331,7 @@ def main():
 
     if args.dry_run:
         return
-    with open(manifest_path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(manifest, fh, ensure_ascii=False, indent=1, sort_keys=True)
+    save()
     print("\nmanifest: %s (%d keys)" % (manifest_path, len(manifest)))
     if flagged:
         print("flagged (review at Tier 0 acceptance; SCAN needs OCR or goes to"
@@ -302,9 +339,12 @@ def main():
               " INTERLEAVED -> re-run with --force KEY --converter pymupdf):")
         for k in flagged:
             print("  %-28s %s" % (k, " ".join(manifest[k].get("flags", []))))
-    print("\nnext: py -3 %s" % os.path.join(inst, "scripts",
-                                            "build_corpus_meta.py"))
-    print("then review the manifest's four denominators -- Tier 0 acceptance.")
+    field = os.path.basename(inst.rstrip("/\\"))
+    field = field[:-4] if field.endswith("-lit") else field
+    print("\nnext: %s %s" % (F.PY, os.path.join(inst, "scripts", "build_corpus_meta.py")))
+    print("then review the manifest's four denominators -- Tier 0 acceptance:")
+    print("  %s %s %s%s" % (F.PY, os.path.join(F.HERE, "tier0_accept.py"), field,
+                            F.dest_arg(os.path.dirname(inst.rstrip("/\\")))))
 
 
 if __name__ == "__main__":

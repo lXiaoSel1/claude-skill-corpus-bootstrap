@@ -1,6 +1,6 @@
 ---
 name: {{FIELD}}-lit
-description: Review an ENGLISH passage you wrote on {{FIELD_KEYWORDS}} and report whether it reads like the {{FIELD}} literature, then return your text with the style fixed. Looks at word choice, terminology, vague versus precise nouns, and sentence-to-sentence cohesion against a measured corpus of {{FIELD}} papers. It is a register reviewer, not an author: your argument, your citations and your numbers are never touched. Use when user says "审一下我这段{{FIELD}}英文", "像不像{{FIELD}}文献", "check my {{FIELD}} writing style", "does this read like the {{FIELD}} literature". NOT a proofreader, NOT a fact-checker (/verify-claims), and NOT for Chinese prose.
+description: "Review an ENGLISH passage you wrote on {{FIELD_KEYWORDS}} and report whether it reads like the {{FIELD}} literature, then return your text with the style fixed. Looks at word choice, terminology, vague versus precise nouns, and sentence-to-sentence cohesion against a measured corpus of {{FIELD}} papers. It is a register reviewer, not an author: your argument, your citations and your numbers are never touched. Use when user says \"审一下我这段{{FIELD}}英文\", \"像不像{{FIELD}}文献\", \"check my {{FIELD}} writing style\", \"does this read like the {{FIELD}} literature\". NOT a proofreader, NOT a fact-checker (/verify-claims), and NOT for Chinese prose."
 author: Xuan Tang
 version: 3.0.1
 argument-hint: "[file path or the text itself] [--audit]"
@@ -9,6 +9,8 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
 ---
 
 # `/{{FIELD}}-lit` — does my prose read like the literature?
+
+> Commands use the Windows launcher `py -3`; on macOS and Linux run them with `python3`.
 
 > **STAMPED INSTANCE ({{FIELD}}) — read this first.** This skill was stamped by
 > `/corpus-bootstrap` from the economics/finance parent (mimic-lit). The
@@ -255,7 +257,7 @@ LEAVE TO AUTHOR
 
 READS LIKE THE LITERATURE: <yes / mostly, n fixes / not yet, m structural issues>
 → nothing written to your manuscript. Say "place it" to write it back.
-→ cached: py scripts/cache.py add "equity share" "re-risking" "top tier"
+→ cached: py -3 scripts/cache.py add "equity share" "re-risking" "top tier"
 ```
 
 ### The two blocks are slots, not reminders

@@ -1,0 +1,26 @@
+name: Usage question
+description: How to run a tier, set up a field, or read a skill's output
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The README's Quick start, Troubleshooting and Known limitations sections
+        answer the most common questions. Please do not attach copyrighted texts.
+  - type: input
+    id: field
+    attributes:
+      label: Your field
+      description: The research field and roughly how many papers are in the corpus
+      placeholder: "population ecology, about 60 papers"
+  - type: input
+    id: tier
+    attributes:
+      label: Where you are
+      description: The step or tier, and the output of `py -3 scripts/tier_status.py <field>` if you have one
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true

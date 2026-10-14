@@ -6,7 +6,7 @@ _why), re-derived from disk, PASS/FAIL per line, exit 0 only if clean.
 Sections gate on registry.built_tiers.
 
 RUN
-    py scripts/check_drift.py
+    py -3 scripts/check_drift.py
 """
 import json
 import os
@@ -142,6 +142,9 @@ if 3 in TIERS:
     nrec = len([f for f in os.listdir(records) if f.endswith(".md")]) \
         if os.path.isdir(records) else 0
     check("records/ non-empty", nrec > 0, "%d files" % nrec)
+    # an empty or unfilled registry must not pass by skipping every check below
+    check("registry sections.chapters recorded", bool(REG["sections"].get("chapters")),
+          "no chapter recorded: Tier 3 has nothing to check")
     total_v = 0
     total_f = 0
     bad_fields, thin = [], []
@@ -194,9 +197,10 @@ if 3 in TIERS:
                 if len(set(key_re.findall(b))) < REG["sections"]["min_attesting_papers"]:
                     thin.append("%s/%s" % (ch, f))
         total_v += count
-        if meta.get("versions"):
-            check("%s: %d Versions" % (ch, meta["versions"]),
-                  count == meta["versions"], "found %d" % count)
+        check("%s: %s Versions" % (ch, meta.get("versions")),
+              meta.get("versions") is not None and count == meta["versions"],
+              "found %d%s" % (count, "" if meta.get("versions") is not None
+                              else "; registry count not recorded"))
         # BACK-PORTED 2026-10-07 from a mathematics instance (2026-09-08): the PASS2 size rule
         # keeps a chapter under 25 KB as a single <chapter>.md, so only a SPLIT
         # chapter must carry a skeleton.
@@ -207,10 +211,10 @@ if 3 in TIERS:
                   "%d B" % os.path.getsize(os.path.join(d, single[0])))
         else:
             check("%s has 00-skeleton.md" % ch, "00-skeleton.md" in files)
-    if REG["sections"].get("total_versions"):
-        check("total Versions == registry",
-              total_v == REG["sections"]["total_versions"],
-              "found %d" % total_v)
+    check("total Versions == registry",
+          REG["sections"].get("total_versions") is not None
+          and total_v == REG["sections"]["total_versions"],
+          "found %d; registry %s" % (total_v, REG["sections"].get("total_versions")))
     check("every Version carries all four fields", not bad_fields,
           "; ".join(bad_fields[:3]))
     check("every Version attested by >=%d papers"
@@ -224,10 +228,10 @@ if 3 in TIERS:
     check("every Example quote found in its paper's slices (verify_versions.py)",
           vv.returncode == 0, (vv.stdout.strip().splitlines() or ["no output"])[-1]
           + ("" if vv.returncode == 0 else "  -> py -3 pipeline/verify_versions.py --verbose"))
-    if REG["uniformity_gate"].get("paragraphs"):
-        check("uniformity calibration recorded",
-              bool(REG["uniformity_gate"].get("triples")
-                   and REG["uniformity_gate"].get("pairs")))
+    check("uniformity calibration recorded",
+          bool(REG["uniformity_gate"].get("paragraphs") and REG["uniformity_gate"].get("triples")
+               and REG["uniformity_gate"].get("pairs")),
+          "uniformity_gate paragraphs/triples/pairs (py -3 pipeline/recount.py)")
 
 # ---- Tier 4: writing canon --------------------------------------------------
 # FACTORY GAP CLOSED 2026-08-29: SKILL.md cites structure-canon.md as the
@@ -259,11 +263,13 @@ if 4 in TIERS:
         # A quotation whose pointer has rotted is worse than no quotation:
         # building this instance found FIVE such pointers in the parent's own
         # canon file, one of them aimed at a blank line.
-        bad = [f for f, q in (cs.get("spot_quotes") or {}).items()
+        sq = cs.get("spot_quotes") or {}
+        bad = [f for f, q in sq.items()
                if not (os.path.exists(os.path.join(canon, f))
                        and q in read(os.path.join(canon, f)))]
-        check("canon spot-quotes greppable verbatim", not bad,
-              "missing in: " + ", ".join(bad))
+        need = min(3, n_txt)
+        check("canon spot-quotes greppable verbatim", not bad and len(sq) >= need,
+              "missing in: " + ", ".join(bad) if bad else "%d spot quotes (need %d)" % (len(sq), need))
     else:
         check("canon-sources reachable at the factory path", False, canon)
     if os.path.exists(sc):

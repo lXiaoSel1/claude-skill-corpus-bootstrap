@@ -57,10 +57,10 @@ RANGE, NOT RAW FREQUENCY
     entangled with relative frequency.
 
 RUN
-    py scripts/attest.py "funding ratio" "de-risking"
-    py scripts/attest.py --all "monotonically"        # full concordance
-    py scripts/attest.py --scope style "risk shifting"
-    py scripts/attest.py --json "moral hazard"
+    py -3 scripts/attest.py "funding ratio" "de-risking"
+    py -3 scripts/attest.py --all "monotonically"        # full concordance
+    py -3 scripts/attest.py --scope style "risk shifting"
+    py -3 scripts/attest.py --json "moral hazard"
 """
 import argparse
 import json
@@ -150,7 +150,7 @@ def load_meta():
     if not os.path.exists(META):
         sys.exit(
             "missing " + os.path.relpath(META, SKILL)
-            + "\n  fix: py scripts/build_corpus_meta.py"
+            + "\n  fix: py -3 scripts/build_corpus_meta.py"
         )
     try:
         import yaml
@@ -443,7 +443,7 @@ def main():
     papers = eligible(meta, args.scope)
     if not papers:
         sys.exit("no eligible papers for scope=%s -- is corpus_meta.yaml stale?"
-                 "\n  fix: py scripts/build_corpus_meta.py" % args.scope)
+                 "\n  fix: py -3 scripts/build_corpus_meta.py" % args.scope)
     total_words = sum(papers.values())
     cap = None if args.all else KWIC_DEFAULT_CAP
 

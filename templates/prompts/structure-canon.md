@@ -11,8 +11,10 @@
   run (17 guides, 151,547 words) took one agent 101 tool calls and 14 minutes and
   processed about 10 million tokens, 97% of them prompt-cache reads;
   `tier_status.py` prints the estimate for this field's guides. Run it once per field.
-- Fill `{jobs}` from `jobs` in field-config.yaml. If it is empty (Tier 2 not
-  built), pass the jobs you expect and tell the agent the mapping is provisional.
+- Fill the braces: `{field}` the field slug, `{draft}` the {field}-draft skill's
+  folder, `{canon_dir}` the `canon_dir` in its field-config.yaml, `{jobs}` the
+  `jobs` there. If `jobs` is empty (Tier 2 not built), pass the jobs you expect
+  and tell the agent the mapping is provisional.
 - Inputs, all in the {field}-draft skill:
   - `references/structure-canon.skeleton.md`: the rule frame (pillars 1–5, S1–S14,
     Q1–Q7, D1–D7, §5, §6), with the parent's guide named as a lead for each rule;

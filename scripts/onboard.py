@@ -45,16 +45,26 @@ import _factory as F
 sys.path.insert(0, os.path.join(F.TEMPLATES, "polish", "scripts"))
 import manuscript as M  # noqa: E402
 
-REPORT_TYPES = {"techreport", "report", "misc", "book", "manual", "booklet", "unpublished",
-                "online", "electronic", "www", "mvbook", "collection", "proceedings",
+# .bib types used for terminology only by default (books, manuals, data)
+REPORT_TYPES = {"book", "manual", "booklet", "mvbook", "collection", "proceedings",
                 "dataset", "software"}
-KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]*$")
-STOP = set("""a an the of and or in on for to with by from at as is are was were be been this that
-these those its their our we it into over under between among than via per not no""".split())
+# working papers and preprints (Zotero exports an NBER or SSRN paper as
+# @techreport or @report, arXiv as @misc): research, unless SHORT at Tier 0
+WORKING_TYPES = {"techreport", "report", "misc", "unpublished", "online", "electronic", "www"}
 EN_FUNC = set("the of and to in is that for with as on are by this be from an which or at".split())
 OTHER_FUNC = set("""de het een van niet der die das und nicht ist mit le les et des du est une pour
 el los las y que por para con una il di che della sono não uma com""".split())
-SCAN_VERSION = 2          # bump when what scan_pdfs records changes
+SCAN_VERSION = 3          # bump when what scan_pdfs records changes
+
+
+def extractor():
+    """The PDF text extractor pdf_head will use: pymupdf, pdftotext or none."""
+    try:
+        import fitz  # noqa: F401
+        return "pymupdf"
+    except ImportError:
+        import shutil
+        return "pdftotext" if shutil.which("pdftotext") else "none"
 
 
 # ---- BibTeX -------------------------------------------------------------------
@@ -201,7 +211,10 @@ def pdf_head(path):
     return "\n".join(pages[:2]), "\n".join(pages[1:] if len(pages) > 2 else pages)
 
 
-def scan_pdfs(folders, cache_path):
+def scan_pdfs(folders, cache_path, flat=()):
+    """folders are searched with their subfolders (the --library folders);
+    flat ones only at their own level (the folders a .bib or a note points
+    into, which may be a whole Documents or Downloads folder)."""
     cache = {}
     if os.path.isfile(cache_path):
         try:
@@ -216,16 +229,26 @@ def scan_pdfs(folders, cache_path):
             for f in sorted(files):
                 if f.lower().endswith(".pdf"):
                     pdfs.append(os.path.normpath(os.path.join(root, f)))
+    for folder in flat:
+        for f in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+            if f.lower().endswith(".pdf") and os.path.isfile(os.path.join(folder, f)):
+                pdfs.append(os.path.normpath(os.path.join(folder, f)))
+    x = extractor()
+    if x == "none" and pdfs:
+        print("  WARNING: no PDF text extractor (PyMuPDF or pdftotext): matching by DOI, title"
+              " and language is off (%s -m pip install pymupdf)" % F.PY)
     out, changed = [], False
     for p in sorted(set(pdfs)):
         st = os.stat(p)
         sig = "%d:%d" % (st.st_size, int(st.st_mtime))
         rec = cache.get(p)
-        if not rec or rec.get("sig") != sig or rec.get("v") != SCAN_VERSION:
+        # a record made with no extractor is redone once one is installed
+        if not rec or rec.get("sig") != sig or rec.get("v") != SCAN_VERSION \
+                or (rec.get("x") == "none" and x != "none"):
             text, body = pdf_head(p)
             w = words(text)
             first = text[:6000]
-            rec = {"sig": sig, "v": SCAN_VERSION,
+            rec = {"sig": sig, "v": SCAN_VERSION, "x": x,
                    "dois": sorted({norm_doi(d) for d in re.findall(r"10\.\d{4,9}/[^\s\"<>]+", first)}),
                    "words": w[:2500], "lang": lang_guess(body), "md5": md5(p)}
             cache[p] = rec
@@ -389,12 +412,19 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--finish", action="store_true")
     a = ap.parse_args()
+    if a.field:
+        a.field = F.norm_field(a.field)   # the slug stamp.py writes
+        if not F.SLUG.match(a.field):
+            F.die("--field must be lowercase ASCII letters and digits with single hyphens"
+                  " between (e.g. health-econ): %r" % a.field)
     if a.finish:
         return finish(a)
     if not a.manuscript or not a.library:
         F.die("give --manuscript <main.tex> and at least one --library <folder or .bib>")
 
-    ms = M.Manuscript(a.manuscript)
+    if not os.path.isfile(F.user_path(a.manuscript)):
+        F.die("no manuscript file at %s" % F.user_path(a.manuscript))
+    ms = M.Manuscript(F.user_path(a.manuscript))
     keys = ms.cited_keys()
     print("manuscript: %s" % ms.path)
     print("  %d sections, %d cited keys, bibliography: %s"
@@ -407,7 +437,7 @@ def main():
         if os.path.isfile(b):
             bib.update(parse_bib(b))
     for lib in a.library:
-        lib = os.path.abspath(lib)
+        lib = F.user_path(lib)
         if os.path.isdir(lib):
             folders.append(lib)
         elif lib.lower().endswith(".bib") and os.path.isfile(lib):
@@ -422,19 +452,22 @@ def main():
                 bib.setdefault(k, e)
         else:
             F.die("--library must be a folder or a .bib file: " + lib)
-    # PDFs a library .bib points at also form a folder to search
+    # the folders a library .bib or a reading note points into are searched
+    # too, at their own level only
+    flat = []
     for e in bib.values():
         for p in bib_files(e):
-            if os.path.isfile(p) and os.path.dirname(p) not in folders:
-                folders.append(os.path.dirname(p))
-    notes = scan_notes(os.path.abspath(a.notes), a.notes_pdf_field) if a.notes else {}
+            if os.path.isfile(p) and os.path.dirname(p) not in flat:
+                flat.append(os.path.dirname(p))
+    notes = scan_notes(F.user_path(a.notes), a.notes_pdf_field) if a.notes else {}
     for n in notes.values():
-        if n["pdf"] and os.path.isfile(n["pdf"]) and os.path.dirname(n["pdf"]) not in folders:
-            folders.append(os.path.dirname(n["pdf"]))
+        if n["pdf"] and os.path.isfile(n["pdf"]) and os.path.dirname(n["pdf"]) not in flat:
+            flat.append(os.path.dirname(n["pdf"]))
     polish_dir = os.path.join(ms.dir, ".polish")
-    pdfs = scan_pdfs(folders, os.path.join(polish_dir, "pdf-scan-cache.json"))
+    pdfs = scan_pdfs(folders, os.path.join(polish_dir, "pdf-scan-cache.json"), flat)
     print("library: %d bib entries, %d PDFs in %d folder(s)%s"
-          % (len(bib), len(pdfs), len(folders), ", %d reading notes" % len(notes) if a.notes else ""))
+          % (len(bib), len(pdfs), len(folders) + len(flat),
+             ", %d reading notes" % len(notes) if a.notes else ""))
 
     idx = match(keys, bib, notes, pdfs)
     ck = corpus_keys(keys)
@@ -508,15 +541,16 @@ def main():
         w.writerow(["key", "path", "group", "role", "note"])
         for c, p, k, rec in rows:
             t = rec.get("type") or ""
-            role = "report" if t in REPORT_TYPES else ("research" if t else "")
+            role = ("report" if t in REPORT_TYPES else "working" if t in WORKING_TYPES
+                    else "research" if t else "")
             w.writerow([c, p, "", role, "cite:%s type:%s match:%s" % (k, rec.get("type", ""), rec.get("method", ""))])
     print("\ncorpus map: %s (%d rows)" % (cmap, len(rows)))
     print("ingest:")
     F.run([sys.executable, "-B", os.path.join(F.HERE, "ingest.py"), fld.lit, "--map", cmap])
     print("manifest:")
     fld.run("lit", "build_corpus_meta.py")
-    print("\nNEXT: py -3 %s %s   (Tier 0 acceptance, default decisions)"
-          % (os.path.join(F.HERE, "tier0_accept.py"), a.field))
+    print("\nNEXT: %s %s %s%s   (Tier 0 acceptance, default decisions)"
+          % (F.PY, os.path.join(F.HERE, "tier0_accept.py"), fld.field, F.dest_arg(a.dest)))
     return 0
 
 
@@ -564,7 +598,10 @@ def report(idx, pdfs, keys):
         print("  not English by its first pages (%d): %s" % (len(ne), ", ".join(ne)))
     rep = sorted(k for k, r in idx.items() if r["pdf"] and r["type"] in REPORT_TYPES)
     if rep:
-        print("  report / book / misc entries (terminology only by default) (%d): %s" % (len(rep), ", ".join(rep)))
+        print("  book / manual / data entries (terminology only by default) (%d): %s" % (len(rep), ", ".join(rep)))
+    wp = sorted(k for k, r in idx.items() if r["pdf"] and r["type"] in WORKING_TYPES)
+    if wp:
+        print("  working papers / preprints / reports (research unless short) (%d): %s" % (len(wp), ", ".join(wp)))
     uncited = len({r["path"] for r in pdfs} - {r["pdf"] for r in idx.values() if r["pdf"]})
     print("  library PDFs not cited by the manuscript: %d (--include-uncited adds them to the corpus)" % uncited)
 

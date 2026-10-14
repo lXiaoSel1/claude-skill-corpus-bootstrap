@@ -558,7 +558,7 @@ def _post1b(w):
 
 
 # ---------------------------------------------------------------------------
-# Self-test fixtures: run  py scripts/textseg.py  to verify
+# Self-test fixtures: run  py -3 scripts/textseg.py  to verify
 # ---------------------------------------------------------------------------
 
 def _selftest():

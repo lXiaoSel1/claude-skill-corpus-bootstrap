@@ -16,7 +16,7 @@ Standalone on purpose (standard library only): the factory's onboard.py
 imports it before any instance exists.
 
 RUN
-    py -3 manuscript.py <main.tex> [--split-level section|subsection]
+    py -3 scripts/manuscript.py <main.tex> [--split-level section|subsection]
 """
 import os
 import re
@@ -32,6 +32,14 @@ _HEAD = re.compile(r"\\(part|chapter|section|subsection|subsubsection)\*?"
 _LABEL = re.compile(r"\\label\{([^}]+)\}")
 _INPUT = re.compile(r"\\(?:input|include)\{([^}]+)\}")
 _ALIAS = re.compile(r"\\defcitealias\{([^}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
+# Every citation command: natbib (\cite \citet \citep \citealt \citeauthor
+# \citepalias \Citet ...) and biblatex (\parencite \textcite \autocite
+# \footcite \smartcite \supercite \fullcite and capitalised forms), with a
+# star and up to two optional arguments. \nocite cites nothing in the text,
+# and \citetext holds free text, not keys. The one copy the polish scripts use.
+CITE_CMD = r"\\(?!nocite\b|citetext\b)[A-Za-z]*[Cc]ite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}"
+CITE_KEYS_RE = re.compile(CITE_CMD + r"\{([^}]+)\}")
+CITE_ANY_RE = re.compile(r"\\citetext\{(?:[^{}]|\{[^{}]*\})*\}|" + CITE_CMD + r"\{[^}]*\}")
 _BIB = re.compile(r"\\bibliography\{([^}]+)\}")
 _BIBRES = re.compile(r"\\addbibresource(?:\[[^\]]*\])?\{([^}]+)\}")
 _END_BODY = re.compile(r"\\(?:bibliography|printbibliography|appendix|end\{document\})")
@@ -223,9 +231,8 @@ class Manuscript(object):
 
     def cited_keys(self):
         keys = set()
-        cite = re.compile(r"\\cite(?!text)[a-zA-Z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]+)\}")
         text = "\n".join(_COMMENT.sub("", ln) for ln in self.expanded_body().splitlines())
-        for m in cite.finditer(text):
+        for m in CITE_KEYS_RE.finditer(text):
             keys |= {k.strip() for k in m.group(1).split(",") if k.strip()}
         return keys
 

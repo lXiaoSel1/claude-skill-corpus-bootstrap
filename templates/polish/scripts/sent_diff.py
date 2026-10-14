@@ -44,7 +44,7 @@ def blocks(lines):
     return out
 
 
-CITE_ANY = re.compile(r"\\citetext\{(?:[^{}]|\{[^{}]*\})*\}|\\cite[a-zA-Z]*\*?(?:\[[^\]]*\]){0,2}\{[^}]*\}")
+CITE_ANY = _rp.CITE_ANY_RE
 
 
 def sentences(text):

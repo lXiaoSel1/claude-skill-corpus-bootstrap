@@ -1,6 +1,6 @@
 ---
 name: {{FIELD}}-draft
-description: Draft ONE English paragraph at a time for a {{FIELD}} manuscript on {{FIELD_KEYWORDS}}, its structure and evidence grounded in a measured corpus of {{FIELD}} papers (attested paragraph Versions, claim ledger before prose). Also reverse-outlines a finished section and traces abstract/intro claims inward to their supporting evidence. Use when user says "帮我写这一段{{FIELD}}", "起草{{FIELD}}引言", "draft the {{FIELD}} intro paragraph", "这一段该怎么组织", "reverse outline this {{FIELD}} section". Drafts structure and evidence, NOT style — run /{{FIELD}}-lit on the output. NOT a manuscript reviewer and NOT a fact-checker.
+description: "Draft ONE English paragraph at a time for a {{FIELD}} manuscript on {{FIELD_KEYWORDS}}, its structure and evidence grounded in a measured corpus of {{FIELD}} papers (attested paragraph Versions, claim ledger before prose). Also reverse-outlines a finished section and traces abstract/intro claims inward to their supporting evidence. Use when user says \"帮我写这一段{{FIELD}}\", \"起草{{FIELD}}引言\", \"draft the {{FIELD}} intro paragraph\", \"这一段该怎么组织\", \"reverse outline this {{FIELD}} section\". Drafts structure and evidence, NOT style — run /{{FIELD}}-lit on the output. NOT a manuscript reviewer and NOT a fact-checker."
 author: Xuan Tang
 version: 2.0.0
 argument-hint: "[section ¶n | --outline <sec> | --trace <sec|abstract>]"
@@ -9,6 +9,8 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
 ---
 
 # `/{{FIELD}}-draft` — 一次一段,结构与证据都有出处
+
+> Commands use the Windows launcher `py -3`; on macOS and Linux run them with `python3`.
 
 > **STAMPED INSTANCE ({{FIELD}}) — read this first.** Stamped by
 > `/corpus-bootstrap` from the economics/finance parent (draft-section). The
@@ -39,9 +41,9 @@ skill never touches `main.tex` — you place the paragraph yourself. `Bash` was 
 two purposes, and the guarantee moved from a tool gate to a behavioural contract:
 
 1. **Read-only checks** — `py -3 scripts/draftcheck.py` (sentence counts, traceable marks and cite
-   keys for the ledger, ownership regex, verb legality, Version existence, numbers-vs-table) and `py scripts/build_evidence_map.py
+   keys for the ledger, ownership regex, verb legality, Version existence, numbers-vs-table) and `py -3 scripts/build_evidence_map.py
    --check`. These write nothing.
-2. **One whitelisted write path** — `py scripts/state.py`, which appends to
+2. **One whitelisted write path** — `py -3 scripts/state.py`, which appends to
    `references/manuscript-state.md` and to no other file (backup + disk read-back inside the script).
 
 **Anything else Bash could write is off-contract.** No `>`, no `tee`, no heredoc, no edits to any file
@@ -62,6 +64,11 @@ this contract; a run that wrote anywhere else is a broken run, report it. For se
    attributing verb may be no stronger than that line supports (`references/verb-ladder.md`).
    Check `references/manuscript-state.md` §C first — a line pasted and adjudicated in an earlier run
    is reused, not re-litigated.
+   **Before Tier 4 is built** this field has no `references/verb-ladder.md` and no
+   `references/structure-canon.md` (the verb counts and rules quoted further down are the parent
+   field's, marked PARENT): attribute with `note that`, or `find that` when the pasted line itself
+   states the finding, and take structural rules from `references/structure-canon.skeleton.md` as
+   unmeasured guidance, never as this field's measured norms.
 5. **Draft only, write only through `state.py`.** The manuscript is never written; the sole write
    path is the behavioural contract above. Register is not this skill's call — hand off to
    `/{{FIELD}}-lit`.
@@ -73,13 +80,13 @@ this contract; a run that wrote anywhere else is a broken run, report it. For se
 | 0 | **INTAKE** — target section, ¶ number, what it must say. Map the section to its directory using the table below. Read `references/manuscript-state.md` (which Versions this manuscript already used/rejected; cached source lines) **if it exists** — before manuscript onboarding it does not, and there is simply no prior state to carry | 0–1 (once per session) |
 | 1a | **SKELETON** — read `references/sections/<chapter>/00-skeleton.md` (14–36 KB); its **router** says which part file this paragraph needs, and its typing appendix says how binding each part is. Recommend ONE Version, name one or two alternates — never a menu | 1 (once per chapter) |
 | 1b | **VERSIONS** — read the **one** part file the router names; pick a Version | 1 |
-| 2a | **EVIDENCE INDEX** — read `references/evidence-map.md` (the cached section/table/figure index). If `py scripts/build_evidence_map.py --check` says STALE, rebuild it first. **Absent before manuscript onboarding**: with no manuscript there is nothing to index, so own-result claims cannot be `SUPPORTED` and the ledger must mark them `ORPHAN` rather than pretend | 0–1 (once per session) |
+| 2a | **EVIDENCE INDEX** — read `references/evidence-map.md` (the cached section/table/figure index). If `py -3 scripts/build_evidence_map.py --check` says STALE, rebuild it first. **Absent before manuscript onboarding**: with no manuscript there is nothing to index, so own-result claims cannot be `SUPPORTED` and the ledger must mark them `ORPHAN` rather than pretend | 0–1 (once per session) |
 | 2b | **NOTES** — one Grep for this ¶'s cite-keys via `references/notes-index.md`; skip keys already in state §C. **Skipped entirely when that file does not exist** — see the attribution guard | 0–1 |
 | 3a | **VALIDATE LEDGER** — the ledger is complete: every planned assertion has a row, every row has a pasted source line, ownership ran on every line (`draftcheck.py own`), verbs are ladder-legal. **No prose until this passes** | 0–1 |
 | 3b | **DRAFT** — one paragraph; joins per `../{{FIELD}}-lit/references/register.md` §8; intro/abstract paragraphs also emit PROMISES rows | 0 |
 | 3c | **MOVE-CHECK** — re-read the chosen Version's `Pattern`/`Use it when` against the draft: did the paragraph execute the moves of the Version selected? Fail → revise → re-check (the validator is the Version file itself; max 2 rounds) | 0 |
-| 4 | **SELF-CHECK** — the numbered questions below, each answered by a slot; `py scripts/draftcheck.py para` supplies the counts | 1 |
-| 5 | **STATE** — `py scripts/state.py use …` for the Version placed; `state.py cache …` for every source line pasted this run | 1 |
+| 4 | **SELF-CHECK** — the numbered questions below, each answered by a slot; `py -3 scripts/draftcheck.py para` supplies the counts | 1 |
+| 5 | **STATE** — `py -3 scripts/state.py use …` for the Version placed; `state.py cache …` for every source line pasted this run | 1 |
 | 6 | **HAND OFF** | 0 |
 
 **Budget: ≤8 calls for the first paragraph of a session (0+1a+1b+2a+2b+3a+4+5), 3–5 after.** Step 1b
@@ -314,7 +321,7 @@ description and definitions are `N/A`.
 Status set: `SUPPORTED` · `SUPPORTED-UNCITED` · `ORPHAN` · `MISMATCH` · `EXTERNAL` · `N/A`.
 **`ORPHAN` and `MISMATCH` block** — the sentence comes back removed, with its row shown.
 The output prints a **six-status tally, all six every time** — a status that fired nothing prints `0`,
-so "checked and clean" and "never checked" cannot look alike. `py scripts/draftcheck.py numbers`
+so "checked and clean" and "never checked" cannot look alike. `py -3 scripts/draftcheck.py numbers`
 pre-screens draft numerals against the referenced `.tex` table; claim → R/Stata output stays with
 `/audit-reproducibility`.
 
@@ -353,7 +360,7 @@ sentence counts occur in **17 of 484 real windows = 3.5%**.
 
 This enforces `humanize` §4 at composition time rather than colliding with it: the skeleton constrains
 **move order**, never sentence micro-architecture. Uniform move order is what the corpus does; uniform
-sentence shape is what AI does. `py scripts/draftcheck.py para` supplies the sentence counts; the two
+sentence shape is what AI does. `py -3 scripts/draftcheck.py para` supplies the sentence counts; the two
 type axes stay judgment (`introduction/00-skeleton.md` §5 holds the only first-sentence taxonomy).
 
 ## Paragraph completeness — the `PARA` slot (argument, not evidence)
@@ -404,7 +411,7 @@ PROMISES (intro/abstract ¶ only; else "n/a — body paragraph")
 PARA  C-C-C ✅ (context S1, verdict S6) · single-point ✅ · question-answered n/a (not results)
 SHAPE  ¶1/¶2/¶3 = n/n/n sentences (draftcheck para) · first-types … — no uniformity flag
 MOVE-CHECK  Version 7 Pattern executed: concession → gap → stake — pass, 1 revision round
-STATE  recorded: state.py use intro 03-tension 7 · 2 source lines cached
+STATE  recorded: state.py use intro 03-tension 7 "opening on the gap" · 2 source lines cached
 NEXT   /{{FIELD}}-lit on this paragraph (register) · manuscript untouched; state file appended
 ```
 
@@ -428,7 +435,7 @@ NEXT   /{{FIELD}}-lit on this paragraph (register) · manuscript untouched; stat
    the referenced table; a numeral the table does not carry is a MISMATCH candidate.
 9. **When the chapter is finished — does it display equations at the corpus's density?** (Only
    where field-config sets `equation_layer: on`; prose fields set it `off` and skip this item.)
-   `py scripts/draftcheck.py section <chapter.tex> <chapter>` prints the draft's displayed-equation
+   `py -3 scripts/draftcheck.py section <chapter.tex> <chapter>` prints the draft's displayed-equation
    count beside the measured norm (`structure-norms.json` layer E). **This is a chapter-level check
    and it has no per-paragraph equivalent**, so it runs once, when the chapter is assembled — never
    skip it on the grounds that every paragraph passed.
@@ -492,10 +499,10 @@ ordering / budget / first-split the corpus supports for that part.
 | `references/verb-ladder.md` | Whenever a sentence attributes to a cited paper |
 | `references/notes-index.md` | Step 2b — cite-key → note path; §B is the no-note list. **Absent until manuscript onboarding**; until then paste from the corpus file instead |
 | `references/structure-canon.md` | The distilled writing canon on section/paragraph architecture — S1–S14, Q1–Q7, D1–D7, every rule with its corpus status and a verbatim `canon-sources/` quote. Consult when a structural call needs an authority |
-| `references/structure-norms.json` | The numbers behind the canon and the router typing appendices; rebuild with `py scripts/measure_structure.py` |
+| `references/structure-norms.json` | The numbers behind the canon and the router typing appendices; rebuild with `py -3 scripts/measure_structure.py` |
 | canon sources (`canon_dir` in field-config.yaml) | The published writing guides, full text, ligature-normalized; `_manifest.md` has URLs, fetch dates and recorded failures. Grep a quote before trusting it |
-| `references/evidence-map.md` | Step 2a — the cached section/table/figure index; `py scripts/build_evidence_map.py --check` before trusting, rebuild on STALE. **Absent until `manuscript_tex` is set in `references/field-config.yaml`** |
-| `references/manuscript-state.md` | Step 0 read · step 5 write (via `state.py` only) — Versions used/rejected in THIS manuscript, cached source-line adjudications. **Created by `py scripts/state.py` on first use**; its absence means no paragraph has been drafted yet |
+| `references/evidence-map.md` | Step 2a — the cached section/table/figure index; `py -3 scripts/build_evidence_map.py --check` before trusting, rebuild on STALE. **Absent until `manuscript_tex` is set in `references/field-config.yaml`** |
+| `references/manuscript-state.md` | Step 0 read · step 5 write (via `state.py` only) — Versions used/rejected in THIS manuscript, cached source-line adjudications. **Created by `py -3 scripts/state.py` on first use**; its absence means no paragraph has been drafted yet |
 | `../{{FIELD}}-lit/references/register.md` §8 | Once per session — read §8's rules R9–R11 (the R9 grade ladder, the K15 structure gate) for drafting guidance only. The full cohesion protocol (cohesion.py, N−1 JOINS table, M8 adjudication) belongs to `/{{FIELD}}-lit`, strictly downstream; this skill never runs it |
 | `../{{FIELD}}-lit/references/terms.md` | Term-presence test (§C negative cache) |
 | `../{{FIELD}}-lit/references/exemplars.md` | On demand — `grep "\[<move>\]"` for sentence-level evidence |

@@ -106,16 +106,16 @@ CANDIDATES_HEADER = """# candidates.md — attestation results awaiting review
 > Written by `scripts/cache.py add`. **Nothing here is authoritative yet.**
 >
 > This file is a friction valve. Attestation results land here first and enter
-> `terms.md` only through an explicit `py scripts/cache.py promote`. A cache
+> `terms.md` only through an explicit `py -3 scripts/cache.py promote`. A cache
 > that promotes itself drifts, and a drifting cache is worse than no cache
 > because it is trusted.
 >
 > Review a row, then promote it:
 >
 > ```
-> py scripts/cache.py list
-> py scripts/cache.py promote "funding ratio"
-> py scripts/cache.py promote --all
+> py -3 scripts/cache.py list
+> py -3 scripts/cache.py promote "funding ratio"
+> py -3 scripts/cache.py promote --all
 > ```
 >
 > Promotion runs a backup and a survival check over `terms.md` first; see the
@@ -288,7 +288,7 @@ def cmd_add(args):
         with open(CANDIDATES, "a", encoding="utf-8", newline="\n") as fh:
             fh.write("".join(rows))
         print("\nwrote %d candidate(s) to references/candidates.md" % len(rows))
-        print("review, fill every REQUIRED slot, then: py scripts/cache.py promote --all")
+        print("review, fill every REQUIRED slot, then: py -3 scripts/cache.py promote --all")
 
 
 def parse_candidates():
@@ -308,7 +308,7 @@ def parse_candidates():
 def cmd_list(args):
     cands = parse_candidates()
     if not cands:
-        print("no candidates. run: py scripts/cache.py add \"<term>\"")
+        print("no candidates. run: py -3 scripts/cache.py add \"<term>\"")
         return
     denom = current_denominator()
     print("%d candidate(s) in references/candidates.md (corpus denominator now"
@@ -334,7 +334,7 @@ def cmd_promote(args):
     wanted = [c for c in cands
               if args.all or c["term"] in args.terms]
     if not wanted:
-        sys.exit("no matching candidate; run: py scripts/cache.py list")
+        sys.exit("no matching candidate; run: py -3 scripts/cache.py list")
 
     denom = current_denominator()
     blocked = [c for c in wanted if "REQUIRED" in c["block"]]

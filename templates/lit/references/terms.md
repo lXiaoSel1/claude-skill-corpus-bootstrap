@@ -1,7 +1,7 @@
 # terms.md — the term cache ({{FIELD}} instance; empty at stamp time)
 
 > Denominator: quote `corpus_meta.yaml`'s terminology_safe, never the raw file
-> count. Rows are written ONLY via `py scripts/cache.py add` -> candidates.md
+> count. Rows are written ONLY via `py -3 scripts/cache.py add` -> candidates.md
 > -> human review -> `cache.py promote`. The three-test rule (word-bounded ·
 > standalone · same sense in running prose) gates every promotion.
 

@@ -25,7 +25,8 @@ def say(ok, what, detail=""):
 
 
 print("environment")
-say(sys.version_info >= (3, 7), "python", sys.version.split()[0])
+say(sys.version_info >= (3, 8), "python", sys.version.split()[0] + ("" if sys.version_info >= (3, 8)
+                                                                    else "  (3.8 or later needed)"))
 try:
     import fitz
     say(True, "PyMuPDF", getattr(fitz, "VersionBind", "?"))
@@ -52,8 +53,9 @@ except SystemExit:
     say(False, "main .tex", "not found -- pass --manuscript, or finish onboarding")
 if ms:
     say(True, "main .tex", ms.path)
-    say(bool(ms.sections), "sections", "%d (%s)" % (len(ms.sections),
-        "input files" if ms.sections and ms.sections[0].kind == "file" else "split at \\" + ms.split_level))
+    say(bool(ms.sections), "sections", "%d (%s): %s" % (len(ms.sections),
+        "input files" if ms.sections and ms.sections[0].kind == "file" else "split at \\" + ms.split_level,
+        ", ".join(s.key for s in ms.sections[:15]) + (" ..." if len(ms.sections) > 15 else "")))
     say(all(os.path.isfile(b) for b in ms.bib_files) if ms.bib_files else None,
         "bibliography", ", ".join(os.path.basename(b) for b in ms.bib_files) or "none declared")
     say(os.path.isfile(ms.bbl) or None, ".bbl", "present" if os.path.isfile(ms.bbl) else "not compiled yet (compile.py)")
@@ -71,7 +73,10 @@ if ms:
     if ctx.config_file:
         say(True, "polish.yaml", ctx.config_file)
 
-hz = os.path.join(os.path.expanduser("~"), ".claude", "skills", "humanizer", "SKILL.md")
+# the user's skills, or the project's own .claude/skills next to this instance
+hzs = [os.path.join(os.path.expanduser("~"), ".claude", "skills", "humanizer", "SKILL.md"),
+       os.path.join(os.path.dirname(_rp.SKILL), "humanizer", "SKILL.md")]
+hz = next((p for p in hzs if os.path.isfile(p) and "§27" in _rp.read(p)), hzs[0])
 hz_g = os.path.isfile(hz) and "§27" in _rp.read(hz)
 say(True, "humanizer section G", hz if hz_g else "use references/humanizer-G.md (installed humanizer has no §27-§32)")
 

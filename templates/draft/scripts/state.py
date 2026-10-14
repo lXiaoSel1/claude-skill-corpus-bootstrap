@@ -20,10 +20,10 @@ WHAT IT HOLDS
        not re-litigated; a row is invalidated only by editing this file.
 
 RUN
-    py scripts/state.py use     <chapter> <part> <version-no> "<label>" [¶n]
-    py scripts/state.py reject  <chapter> <part> <version-no> "<reason>"
-    py scripts/state.py cache   <cite-key> <verb> <owner-verdict> "<verbatim line>" "<file:line>"
-    py scripts/state.py list    [chapter]
+    py -3 scripts/state.py use     <chapter> <part> <version-no> "<label>" [¶n]
+    py -3 scripts/state.py reject  <chapter> <part> <version-no> "<reason>"
+    py -3 scripts/state.py cache   <cite-key> <verb> <owner-verdict> "<verbatim line>" "<file:line>"
+    py -3 scripts/state.py list    [chapter]
 """
 import datetime
 import os
@@ -46,7 +46,7 @@ HEADER = """# manuscript-state.md — cross-run drafting state (written ONLY by 
 
 > The one file a drafting run writes. Behavioural contract: SKILL.md's
 > write-path whitelist names exactly this file; everything else stays
-> read-only. Rows are appended by `py scripts/state.py`; invalidate a row by
+> read-only. Rows are appended by `py -3 scripts/state.py`; invalidate a row by
 > deleting it here by hand.
 
 ## A. Versions used

@@ -12,7 +12,7 @@ The printed numbers ARE the instance's uniformity gate: copy them into the
 draft instance's SKILL.md and registry at Tier 3 acceptance.
 
 RUN
-    py pipeline/recount.py
+    py -3 pipeline/recount.py
 """
 import glob
 import os

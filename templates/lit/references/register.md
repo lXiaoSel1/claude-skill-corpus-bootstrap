@@ -3,7 +3,7 @@
 
 > **INSTANCE STATUS.** Rule ARCHITECTURE (R1-R11, the gate logic, the slots)
 > is field-invariant and live from day one. Every COUNT below is the parent
-> finance corpus's until `py scripts/measure_register.py` runs on this field's
+> finance corpus's until `py -3 scripts/measure_register.py` runs on this field's
 > corpus at Tier 1 — treat parent counts as illustrations, never as this
 > field's verdicts. §3 (precise nouns) and §5 (theory frame) are
 > MANUSCRIPT-ONBOARDING slots: they fill when this field's manuscript exists,
@@ -48,7 +48,7 @@
 Scholars ASSERT an established mechanism; they do not re-derive it with connective glue.
 
 **Every rule below carries its measurement.** Counts are from `register-measurements.md`
-(149 style-safe papers, 2,308,511 words); rerun `py scripts/measure_register.py` to reproduce
+(149 style-safe papers, 2,308,511 words); rerun `py -3 scripts/measure_register.py` to reproduce
 any figure. A rule with no count is a rule nobody can check, and this section used to be all
 of those.
 
@@ -82,7 +82,7 @@ same failure `draft-section/references/verb-ladder.md` recorded for `(in)?consis
 where a pattern swallowed the negation and the statistic measured its own opposite.
 
 So: **raise it as a question, with evidence attached.** Run
-`py scripts/attest.py "<verb>"` and read the concordance. Test per verb — would Rauh2009 or
+`py -3 scripts/attest.py "<verb>"` and read the concordance. Test per verb — would Rauh2009 or
 AnHuangZhang2013 use this exact verb in this slot? Absent as a verb → offer a R1 whitelist
 verb. Present as a technical term → leave it alone.
 
@@ -159,7 +159,7 @@ The parent's frame is kept below as a SHAPE example only; none of it applies to 
 ## 6. AI-voice — corpus-refuted only
 
 ### R4 · The gate: nothing is flagged as AI voice until the corpus has been asked
-**Run `py scripts/attest.py "<phrase>"` BEFORE forming the judgment, not after.** A phrase
+**Run `py -3 scripts/attest.py "<phrase>"` BEFORE forming the judgment, not after.** A phrase
 carried by **≥3 distinct papers is this literature's register, not an AI tell**, and flagging
 it moves the author's prose *away* from the corpus — which inverts the purpose of this skill.
 
@@ -250,7 +250,7 @@ compression.
 
 ### R9 · The join table — N−1 rows, no exceptions [the cohesion check itself]
 A paragraph of N sentences produces **N−1 JOINS rows**. Run
-`py scripts/cohesion.py --section <sec> "<paragraph>"` first; it supplies the mechanical
+`py -3 scripts/cohesion.py --section <sec> "<paragraph>"` first; it supplies the mechanical
 half of every row (grade by antecedent distance, overlap, carrier candidates, connective
 openers). The review supplies the semantic half, per row:
 

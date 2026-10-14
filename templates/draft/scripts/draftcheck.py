@@ -10,11 +10,11 @@ WHY THIS EXISTS
     C-C-C and warrants, not on counting.
 
 RUN  (paragraph text via a file, or - for stdin)
-    py scripts/draftcheck.py para draft.txt          # sentences · traceable · cites · verbs
-    py scripts/draftcheck.py own "<pasted source line>" [...]
-    py scripts/draftcheck.py version results/02-estimate.md 6
-    py scripts/draftcheck.py numbers draft.txt tables/main.tex
-    py scripts/draftcheck.py section intro-draft.tex <chapter>
+    py -3 scripts/draftcheck.py para draft.txt          # sentences · traceable · cites · verbs
+    py -3 scripts/draftcheck.py own "<pasted source line>" [...]
+    py -3 scripts/draftcheck.py version results/02-estimate.md 6
+    py -3 scripts/draftcheck.py numbers draft.txt tables/main.tex
+    py -3 scripts/draftcheck.py section intro-draft.tex <chapter>
 
 FACTORY FIXES 2026-10-07: manuscript/table paths come from field-config
 (`manuscript_tables`, relative to the project root) instead of the parent's
@@ -35,7 +35,6 @@ if hasattr(sys.stdout, "reconfigure"):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
-PROJECT = os.path.normpath(os.path.join(SKILL, "..", "..", ".."))
 REF = os.path.join(SKILL, "references")
 sys.path.insert(0, os.path.join(SKILL, "pipeline"))
 import _jobs  # noqa: E402
@@ -144,13 +143,11 @@ def cmd_version(part, n):
 
 def cmd_numbers(draft, table):
     d = strip_tex(read_arg(draft))
-    tables_dir = _jobs.manuscript_paths()[1]
+    tables_dir = _jobs.manuscript_paths()[1]   # resolved: absolute or project-relative
     if os.path.isabs(table) or os.path.exists(table):
         tpath = table
     elif tables_dir:
-        base = tables_dir if os.path.isabs(tables_dir) else os.path.join(
-            PROJECT, tables_dir)
-        tpath = os.path.join(base, table)
+        tpath = os.path.join(tables_dir, table)
     else:
         sys.exit("relative table path and no manuscript_tables in"
                  " field-config.yaml -- give an absolute path")

@@ -20,8 +20,8 @@ SAFETY
     Idempotent: rows that already carry a key are skipped.
 
 RUN
-    py scripts/backfill_cite_keys.py --dry-run
-    py scripts/backfill_cite_keys.py
+    py -3 scripts/backfill_cite_keys.py --dry-run
+    py -3 scripts/backfill_cite_keys.py
 """
 import argparse
 import os

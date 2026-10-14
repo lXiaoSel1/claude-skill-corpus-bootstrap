@@ -1,7 +1,9 @@
 > FACTORY NOTE (2026-08-26): carried VERBATIM from draft-section/references/
 > pipeline/PASS1_SPEC.md -- the spec the parent records/ were actually built
 > under. Dispatch: shard the chapter's slices into groups of 8-16 papers,
-> one agent per shard, each emitting its shard file; concatenate shards
+> one agent per shard, each writing its shard file to
+> `references/records/_shards/<chapter>-NN.md` (NN = 01, 02, ...; this is the
+> folder `pipeline/verify_shards.py` checks); concatenate shards
 > into records/<chapter>.md and keep the shards for provenance. Replace
 > chapter/paper names with the new field's. Do not edit the rules below.
 >

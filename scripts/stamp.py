@@ -24,6 +24,7 @@ RUN
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -32,6 +33,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import _factory as F  # noqa: E402  (slug rule, ~ expansion, launcher name)
 SKILL = os.path.dirname(HERE)
 TEMPLATES = os.path.join(SKILL, "templates")
 CANON = os.path.join(SKILL, "references", "canon-sources")
@@ -47,6 +50,24 @@ def stamp_text(text, field, style):
                 .replace("{{FIELD}}", field)
                 .replace("{{CITATION_STYLE}}", style)
                 .replace("{{CANON_DIR}}", CANON.replace("\\", "/")))
+
+
+DESC_MAX = 1024   # Claude Code's limit on a skill description
+
+
+def check_descriptions(field, style, which):
+    """Every stamped description must stay a valid double-quoted YAML string
+    under DESC_MAX characters; --keywords is pasted into it unescaped."""
+    kw = KEYWORDS[0]
+    if re.search(r'["\\\r\n]', kw):
+        sys.exit('--keywords may not contain double quotes, backslashes or line breaks')
+    for w in which:
+        with open(os.path.join(TEMPLATES, w, "SKILL.md.tmpl"), encoding="utf-8") as fh:
+            m = re.search(r'^description: "(.*)"$', fh.read(), re.M)
+        n = len(stamp_text(m.group(1), field, style).replace('\\"', '"').replace("\\\\", "\\"))
+        if n > DESC_MAX:
+            sys.exit("the %s-%s description would be %d characters (limit %d): shorten --keywords"
+                     % (field, w, n, DESC_MAX))
 
 
 def copy_tree(src, dst, field, style):
@@ -104,12 +125,16 @@ def main():
                     " (default: <dest>/<field>-draft)")
     args = ap.parse_args()
     KEYWORDS[0] = args.keywords.strip()
-    field = args.field.strip().lower()
-    if not field.replace("-", "").isalnum():
-        sys.exit("field slug must be kebab-case alphanumeric")
-    dest = os.path.abspath(args.dest)
+    field = F.norm_field(args.field)
+    if not F.SLUG.match(field):
+        sys.exit("field slug must be lowercase ASCII letters and digits, with single hyphens"
+                 " between (e.g. health-econ): %r" % args.field)
+    dest = F.user_path(args.dest)
     if not os.path.isdir(dest):
         sys.exit("--dest is not an existing directory: " + dest)
+    args.lit_dir, args.draft_dir = F.user_path(args.lit_dir), F.user_path(args.draft_dir)
+    check_descriptions(field, args.citation_style,
+                       ["polish"] if args.add == "polish" else ["lit", "draft", "polish"])
 
     lit = os.path.join(dest, field + "-lit")
     draft = os.path.join(dest, field + "-draft")
@@ -166,9 +191,11 @@ def main():
     print("  " + polish)
     print("next (Tier 0): convert PDFs, either from drop/ or straight from a"
           " library folder:")
-    print("  py -3 %s %s [--src <pdf-folder> --recursive --map <keys.csv>]"
-          % (os.path.join(SKILL, "scripts", "ingest.py"), lit))
-    print("  py -3 %s" % os.path.join(lit, "scripts", "build_corpus_meta.py"))
+    print("  %s %s %s [--src <pdf-folder> --recursive | --map <keys.csv>]"
+          % (F.PY, os.path.join(SKILL, "scripts", "ingest.py"), lit))
+    print("  %s %s" % (F.PY, os.path.join(lit, "scripts", "build_corpus_meta.py")))
+    print("  %s %s %s%s   # Tier 0 acceptance" % (F.PY, os.path.join(SKILL, "scripts", "tier0_accept.py"),
+                                                   field, F.dest_arg(dest)))
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ if not openers:
     _rp.die("no paragraph openers found in %s/references/records/*.md" % ctx.draft)
 
 CITETEXT = re.compile(r"\\citetext\{(?:[^{}]|\{[^{}]*\})*\}")
-CITE = re.compile(r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\]){0,2}\{[^}]*\}")
+CITE = _rp.CITE_ANY_RE
 
 
 def clean(t):

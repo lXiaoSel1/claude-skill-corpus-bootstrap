@@ -19,8 +19,8 @@ WHY THIS EXISTS
     legitimately never appear in a slice and must not be counted as failures.
 
 RUN
-    py pipeline/verify_shards.py
-    py pipeline/verify_shards.py --verbose
+    py -3 pipeline/verify_shards.py
+    py -3 pipeline/verify_shards.py --verbose
 """
 import glob
 import io

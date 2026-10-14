@@ -47,9 +47,9 @@ METRICS (ordered by validity in the literature, not by fame)
                              would saturate the index in this genre.)
 
 RUN
-    py scripts/cohesion.py "<paragraph text>"
-    py scripts/cohesion.py --section results --file para.txt
-    py scripts/cohesion.py --json "<paragraph text>"
+    py -3 scripts/cohesion.py "<paragraph text>"
+    py -3 scripts/cohesion.py --section results --file para.txt
+    py -3 scripts/cohesion.py --json "<paragraph text>"
 """
 import argparse
 import json
@@ -358,7 +358,7 @@ def render(sents, section):
             else:
                 print("  %-24s %.3f   (no norm)" % (label, v))
         else:
-            print("  %-24s %.3f   (norms not built: py scripts/build_cohesion_norms.py)"
+            print("  %-24s %.3f   (norms not built: py -3 scripts/build_cohesion_norms.py)"
                   % (label, v))
     if m.get("m5_orphan_sentences"):
         print("  orphan sentences: %s (no content stem shared with anything earlier)"

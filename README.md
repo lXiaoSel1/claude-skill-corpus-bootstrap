@@ -10,7 +10,7 @@ A [Claude Code](https://claude.com/claude-code) skill that learns how a research
 - **`<field>-draft`** drafts one paragraph at a time. Each paragraph follows a structure (a "Version") observed in at least two papers of your corpus, and every claim needs a ledger row with a pasted source line before the sentence is written. It can also reverse-outline a finished section (`--outline`) and trace introduction or abstract claims to the tables that support them (`--trace`).
 - **`<field>-polish`** revises your manuscript one section at a time, in your own `main.tex`. It scans the whole text against the corpus, checks rare words in the cited papers' own PDFs, checks every changed claim against its source, then compiles the manuscript and renders the section. It finds the sections and each citation's PDF by itself, so there is no configuration file to fill in.
 
-**One-step onboarding** builds a field from a manuscript and a library: a PDF folder, a Zotero or JabRef `.bib` export, or PDFs with reading notes. It matches every citation to its PDF and runs Tiers 0 and 1 without stopping.
+**One-step onboarding** builds a field from a LaTeX manuscript and a library: a PDF folder, a Zotero or JabRef `.bib` export that includes file paths, or PDFs with reading notes. It matches every citation to its PDF and runs Tiers 0 and 1 without stopping.
 
 Nothing is inherited from another field. Term counts, paragraph lengths, cohesion norms, the chapter taxonomy and the verb ladder for attributing claims are all measured on your own corpus.
 
@@ -195,12 +195,12 @@ The reading passes run as Claude Code subagents with the prompts in `templates/p
 
 ### One-step onboarding
 
-When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Each script prints its default decisions as a table; you can change any of them and run the script again.
+When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Each script prints its default decisions as a table. To change a Tier 0 decision, edit the lists in both `field-config.yaml` files and run `tier0_accept.py <field> --keep-config`; to fix the paragraph threshold, run `calibrate_paragraphs.py <field> --set N`. Without these flags, a second run works out the defaults again.
 
 | Step | Script | What it does |
 |---|---|---|
 | 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Creates the field's skills (it asks you for a name and keywords) or reuses them, and ingests the matched PDFs |
-| 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, reports and books are used for terminology only, short research entries are excluded |
+| 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, books and manuals are used for terminology only, working papers and preprints count as research unless they are short, short research entries are excluded |
 | 3 | `calibrate_paragraphs.py` | Chooses the paragraph-length threshold for the corpus by a sweep from 80 to 400 characters |
 | 4 | `tier1_fill.py` | Builds the style layer and fills every Tier 1 number and verdict, so `check_drift` passes with no hand editing |
 | 5 | (Claude) | Reviews one paragraph of your manuscript with `<field>-lit` and shows you the result |
@@ -253,17 +253,24 @@ To keep the cost under control:
 
 - Claude Code (the reading passes use subagents)
 - Python 3.8 or later
-- **PyMuPDF** (`pip install pymupdf`). Treat it as required: without it (or pypdf) page counts are 0 and scanned PDFs are not flagged.
-- **`pdftotext`** from Poppler, on your PATH or set in `field-config.yaml`
+- **PyMuPDF** (`py -3 -m pip install pymupdf`). Treat it as required: without it, two-column papers that come out interleaved cannot be re-extracted, and without it or pypdf page counts come only from `pdftotext`.
+- **`pdftotext`** from Poppler, recommended: on your PATH or set in `field-config.yaml`. Without it, PyMuPDF converts the PDFs; the self-test needs `pdftotext`. On Windows, MiKTeX and Git for Windows each come with a build.
+- For onboarding and `<field>-polish`: a **LaTeX manuscript** (natbib or biblatex citations). Word and Markdown manuscripts are not supported.
 - For `<field>-polish` step i: a TeX distribution with `pdflatex` or `xelatex`, and `bibtex` or `biber`
 - Optional: PyYAML, pypdf
 
-The documentation uses the Windows launcher `py -3`. On macOS or Linux, use `python3`.
+The documentation uses the Windows launcher `py -3`. On macOS or Linux, use `python3` (and `python3 -m pip`).
 
 ## Install
 
 ```bash
 git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap ~/.claude/skills/corpus-bootstrap
+```
+
+Windows PowerShell does not expand `~` in that command. There, use:
+
+```powershell
+git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap "$HOME/.claude/skills/corpus-bootstrap"
 ```
 
 The folder must be named `corpus-bootstrap`. Stamped skills are created next to it, in the same `skills/` folder, unless you pass `--dest`. A project-level `.claude/skills/` folder works as well.
@@ -278,27 +285,31 @@ cd ~/.claude/skills/corpus-bootstrap
 # 1. Create the three skills for the field
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
-# 2. Convert your PDFs: put them in ../ecology-lit/drop/, or read them in place from your library
+# 2. Convert your PDFs, read in place from your library
+#    (or copy them into ../ecology-lit/drop/ and leave out --src)
 py -3 scripts/ingest.py ../ecology-lit --src "/path/to/your/pdfs" --recursive
 
-# 3. Build the corpus manifest, then review it
+# 3. Build the corpus manifest (../ecology-lit/references/corpus_meta.yaml) and read its flags
 py -3 ../ecology-lit/scripts/build_corpus_meta.py
 
-# 4. See which tiers are built and what the next one costs
+# 4. Accept Tier 0 with the default decisions (scans excluded, short documents for terms only)
+py -3 scripts/tier0_accept.py ecology
+
+# 5. See which tiers are built and what the next one costs
 py -3 scripts/tier_status.py ecology
 ```
 
-Then ask Claude Code for the next tier, for example `/corpus-bootstrap tier 1`. Tiers can be resumed at any point; `tier_status.py` reads the ledger.
+Tier 1 is two more scripts: `py -3 scripts/calibrate_paragraphs.py ecology`, then `py -3 scripts/tier1_fill.py ecology`. For Tiers 2–4, ask Claude Code, for example `/corpus-bootstrap tier 2`. You can stop and resume at any point; `tier_status.py` reads the built tiers from the skills' registries.
 
-`--citation-style` accepts `author-year`, `numeric` or `mixed`. `--keywords` goes into the trigger descriptions of the new skills.
+`--citation-style` accepts `author-year`, `numeric` or `mixed`. `--keywords` goes into the trigger descriptions of the new skills. If you stamp with `--dest <folder>`, pass the same `--dest` to every script in `scripts/`.
 
 **Or start from a manuscript and your library.** In Claude Code, say `/corpus-bootstrap polish` and give the paths; Claude runs these steps and asks before Tier 2. By hand:
 
 ```bash
-# 1. Match every citation to its PDF, stamp the field and ingest
-#    (without --field it stops and asks for a name; --dry-run only builds the index)
-py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs \
-    --library /path/to/library.bib --field ecology --keywords "population ecology, habitat loss"
+# 1. Match every citation to its PDF, stamp the field and ingest. One line, so it works in
+#    bash, PowerShell and cmd alike (without --field it stops and asks for a name;
+#    --dry-run only builds the index; --notes is optional)
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
 
 # 2. Tier 0 acceptance, the paragraph threshold, Tier 1
 py -3 scripts/tier0_accept.py ecology
@@ -309,7 +320,11 @@ py -3 scripts/tier1_fill.py ecology
 py -3 scripts/onboard.py --finish --field ecology
 ```
 
-Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. To add the third skill to a field stamped with version 1.1.0, run `py -3 scripts/stamp.py ecology --add polish`.
+Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. To add the third skill to a field stamped before 1.2.0, run `py -3 scripts/stamp.py ecology --add polish`.
+
+Reading notes (`--notes`) are Markdown files, one per paper, named after the citation key (`Smith2019.md`). A line such as `pdf: ../pdfs/smith-2019.pdf` near the top links the note to its PDF (a relative path starts from the note's folder). Quoted sentences with their page on the same line, such as `- "medical spending rose after the reform" (p.4)`, are what the polish step e script `note_terms.py` reads.
+
+Onboarding and `<field>-polish` keep their working files in a `.polish/` folder next to your `main.tex`: the library index, snapshots and backups. Add `.polish/` to your manuscript's `.gitignore`, or leave it out of Overleaf sync.
 
 **You download the papers yourself.** The skill does not fetch, scrape or call any API. Keep your PDFs and corpus text out of any public repository.
 
@@ -343,9 +358,9 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 
 **Or do it by hand.**
 
-1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. The default folder is `references/canon-sources/`. To keep a separate set for each field, set `canon_dir` to another folder in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
-2. At Tier 4, record the number of guide files (`count`) and three or four verbatim spot quotes (`spot_quotes`) under `canon_sources` in the `-draft` skill's `references/registry.json`. `check_drift` searches for each quote in the files.
-3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. You can start from the skeleton in `templates/draft/references/`, and `check_canon_quotes.py` checks the quotes.
+1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. Until you change it, `canon_dir` points at the factory's own `corpus-bootstrap/references/canon-sources/` (`canon_ingest.py` uses the `-draft` skill's folder instead). To use another folder, set `canon_dir` in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
+2. At Tier 4, record the number of guide files and at least three verbatim spot quotes (fewer only when you have fewer guides) under `canon_sources` in the `-draft` skill's `references/registry.json`, keyed by file: `"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "a sentence copied from that file"}}`. `check_drift` searches for each quote in its file.
+3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. You can start from the skeleton in `templates/draft/references/`. `check_drift` also requires the file to mention `canon-sources` and to carry `TO-MEASURE` tags for rules not yet measured, and `check_canon_quotes.py` checks the quotes.
 
 ## Self-test
 
@@ -353,22 +368,32 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 py -3 tests/run_selftest.py
 ```
 
-The self-test runs 119 checks in four parts:
+The self-test runs 135 checks in five parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
-3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
+3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script except `compile.py` (which needs TeX) runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
 4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
+5. The inputs that broke 1.3.0: biblatex citations, field names and keywords that used to break stamping, a folder with brackets, an upper-case `.PDF`, an interrupted ingest, working papers at Tier 0, an empty Tier 3 registry, and writing guides with no PDF converter available.
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
+
+## Troubleshooting
+
+- **A paper is flagged SCAN, SHORT or INTERLEAVED.** SCAN means the PDF has no text layer: OCR it and ingest it again, or leave it excluded. SHORT often means only an abstract or a landing page was saved: download the full paper. INTERLEAVED means two columns were read across each other: run `ingest.py` again with the same `--src` or `--map` plus `--force KEY --converter pymupdf` (`tier0_accept.py` does this for you when PyMuPDF is installed).
+- **`stamp.py` refuses to overwrite.** A stamped skill holds measured state. To start over, delete the field's three folders yourself.
+- **A script cannot find the field.** If you stamped with `--dest`, pass the same `--dest` again.
+- **Two different `pdftotext` builds.** On Windows, PowerShell and Git Bash can find different ones (for example MiKTeX's and Git's). Pin one with `pdftotext:` in both `field-config.yaml` files.
+- **An edited `field-config.yaml` reads wrong.** Save it as UTF-8. In Windows PowerShell 5.1, `Set-Content` writes the system code page unless you pass `-Encoding utf8`.
+- **`onboard.py` stops with exit code 3.** It needs a field name, and topic keywords for a new field: run it again with `--field <name> --keywords "..."`. Exit code 2 is an error, and the message says what to fix.
 
 ## Known limitations
 
 - **Tier 4 needs writing guides you find.** Tiers 0–3 run without anything else. Tier 4 also needs writing guides for your field (see [Writing guides for Tier 4](#writing-guides-for-tier-4)). The skill converts them and drafts `structure-canon.md` from a skeleton, but it does not find them for you. The skeleton's rules come from the original build's economics guides, and the drafting pass has been measured only on those guides; in another field, more rules may end up with no source.
 - **English corpora only.** The sentence splitter, word lists and corpus measurements assume English.
 - **Windows first.** Documentation and printed hints assume `py -3`. The scripts themselves are cross-platform.
-- **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml`, because two scripts resolve relative paths differently.
-- **Optional modes need agents that are not included.** `<field>-lit --audit` calls a `humanize-auditor` agent, and `<field>-draft` can fork a `claim-verifier` agent. Both are off by default.
+- **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml` (onboarding writes them that way). A relative path is read from the project folder only when the skills sit in `<project>/.claude/skills/`; anywhere else the scripts stop and ask for an absolute path.
+- **Some optional steps use skills or agents that are not included.** `<field>-lit --audit` calls a `humanize-auditor` agent, and `<field>-draft` can fork a `claim-verifier` agent; both are off by default. Polish step f uses the `humanizer` skill when it is installed, and falls back to the included `references/humanizer-G.md`. The skills also suggest other skills for the next step (`/proofread`, `/review-paper`, `/verify-claims`, `/seven-pass-review`, `/audit-reproducibility`); none of them is needed.
 - **`<field>-polish` has known gaps.** Its first end-to-end run (2026-10-14) completed every step and passed every check, and it also found problems that are not fixed yet:
   - step c needs step e's verdicts on source terms, and the edits from step c must be written before steps d and d2 read the file;
   - the list of one-off frames (L2b) is long and is mostly ordinary grammar;
@@ -381,13 +406,17 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
 
 ```
 SKILL.md                    the skill Claude Code loads
+CHANGELOG.md                what changed in each version
+CITATION.cff                how to cite this repository
+CONTRIBUTING.md             reporting problems and sending changes
+.github/ISSUE_TEMPLATE/     forms for bug reports and usage questions
 scripts/                    stamp, ingest, capture, tier_status; onboard, tier0_accept,
                             calibrate_paragraphs, tier1_fill (one-step onboarding);
                             canon_ingest (Tier 4 writing guides)
 templates/lit/              skeleton of <field>-lit
 templates/draft/            skeleton of <field>-draft, with the structure-canon skeleton
 templates/polish/           skeleton of <field>-polish: steps a-j, scripts, an optional settings example
-templates/field-config.yaml the single per-field config both skills read
+templates/field-config.yaml the per-field config the -lit and -draft skills read (-polish reads the -lit copy)
 templates/prompts/          prompts for the reading passes and the structure-canon draft, with format examples
 references/                 build provenance, an archived (unimplemented) fetch survey, the writing-guide manifest
 tests/run_selftest.py       the self-test
@@ -396,6 +425,6 @@ docs/images/                screenshots used in this README
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Version 1.3.0 (2026-10-14).
+MIT. See [LICENSE](LICENSE). Version 1.3.1 (2026-10-14).
 
 Written by Xuan Tang, in a project built on Pedro Sant'Anna's [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) template for academic work with Claude Code.

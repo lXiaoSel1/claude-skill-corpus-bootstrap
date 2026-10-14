@@ -22,8 +22,8 @@ THE SAMPLING BUG THIS FIXES
     inviting the same misreading again.
 
 RUN
-    py scripts/build_transitions.py
-    py scripts/build_transitions.py --per-category 40
+    py -3 scripts/build_transitions.py
+    py -3 scripts/build_transitions.py --per-category 40
 """
 import argparse
 import os
@@ -168,7 +168,7 @@ def main():
 
     L = ["# transitions.md — how this literature connects adjacent sentences",
          "",
-         "> **GENERATED FILE.** Rebuild with `py scripts/build_transitions.py`.",
+         "> **GENERATED FILE.** Rebuild with `py -3 scripts/build_transitions.py`.",
          "> Harvested %s from **%d style-safe papers** (`corpus_meta.yaml`), the full"
          % (date.today().isoformat(), len(ids)),
          "> eligible corpus (the parent economics build once used a 45-paper sample).",

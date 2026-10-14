@@ -89,7 +89,7 @@ def main():
             fh.write("\nPapers with no recovered paragraph at the chosen value: %s\n" % ", ".join(pick["zero"]))
     print("\nchosen para_min_chars = %d (%s); both field-configs updated; sweep -> %s"
           % (pick["t"], how, os.path.relpath(out, fld.lit)))
-    print("NEXT: py -3 %s %s" % (os.path.join(F.HERE, "tier1_fill.py"), a.field))
+    print("NEXT: %s %s %s%s" % (F.PY, os.path.join(F.HERE, "tier1_fill.py"), a.field, F.dest_arg(a.dest)))
 
 
 if __name__ == "__main__":

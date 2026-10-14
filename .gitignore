@@ -5,9 +5,15 @@ __pycache__/
 # Copyrighted texts and corpora never belong in this repository
 references/canon-sources/*.txt
 references/canon-sources/_raw/
+references/canon-sources/canon_sources.json
 **/drop/
 **/references/corpus/
 *.pdf
+
+# Local working state (snapshots, backups, a manuscript's polish folder)
+.snapshots/
+*.bak
+.polish/
 
 # OS files
 .DS_Store

@@ -42,7 +42,7 @@ import ingest  # noqa: E402  (converter, convert, page_count, sha256)
 EXT = (".pdf", ".html", ".htm", ".txt", ".md")
 NORM = {"ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
         "‘": "'", "’": "'", "“": '"', "”": '"', "­": "", " ": " "}
-SCAN_WPP = 60
+SCAN_WPP = ingest.SCAN_WPP
 
 
 def slug(name):
@@ -106,14 +106,16 @@ def normalize(text):
 
 
 def to_text(path, conv, tmp):
-    """(text, pages, title, converter label)"""
+    """(text, pages, title, converter label); conv() gives the PDF converter,
+    looked up only when a PDF comes along (web pages and text need none)."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".pdf":
-        ingest.convert(conv, path, tmp)
+        c = conv()
+        ingest.convert(c, path, tmp)
         with open(tmp, encoding="utf-8", errors="replace") as fh:
             t = fh.read()
         os.remove(tmp)
-        return t, ingest.page_count(path), "", conv[0]
+        return t, ingest.page_count(path, t), "", c[0]
     if ext in (".html", ".htm"):
         p = _Text()
         p.feed(read_any(path))
@@ -244,15 +246,22 @@ def main():
     os.makedirs(canon, exist_ok=True)
     pj = os.path.join(canon, "canon_sources.json")
     rec = json.load(open(pj, encoding="utf-8")) if os.path.isfile(pj) else {}
-    conv = ingest.converter(ingest.load_config(fld.lit))
+    found = []
+
+    def conv():
+        if not found:
+            found.append(ingest.converter(ingest.load_config(fld.lit)))
+        return found[0]
     failed = []
     for it in items:
         k, src = it["key"], it["path"]
         out = os.path.join(canon, k + ".txt")
         prev = rec.get(k, {})
-        if os.path.exists(out) and k not in a.force and prev.get("txt_sha256") \
-                and ingest.sha256(out) != prev["txt_sha256"]:
-            print("  %-32s kept (edited by hand)" % k)
+        if os.path.exists(out) and k not in a.force and (
+                not prev.get("txt_sha256") or ingest.sha256(out) != prev["txt_sha256"]):
+            # edited by hand, or put here by hand with no record of ours
+            print("  %-32s kept (%s)" % (k, "edited by hand" if prev else "added by hand; --force %s"
+                                         " to convert the source instead" % k))
             continue
         try:
             text, pages, title, how = to_text(src, conv, out + ".tmp")
@@ -297,8 +306,8 @@ def main():
     if failed:
         print("not converted: %d (listed in _manifest.md)" % len(failed))
     print("\nNEXT (step 3, a model pass -- ask the user first): Claude drafts structure-canon.md"
-          " following %s,\n  then: py -3 %s"
-          % (os.path.join(fld.draft, "prompts", "structure-canon.md"),
+          " following %s,\n  then: %s %s"
+          % (os.path.join(fld.draft, "prompts", "structure-canon.md"), F.PY,
              os.path.join(fld.draft, "scripts", "check_canon_quotes.py")))
     print("  estimate: %s" % canon_estimate(words))
     return 0

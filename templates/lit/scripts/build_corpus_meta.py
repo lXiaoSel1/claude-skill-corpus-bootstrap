@@ -21,7 +21,7 @@ DAMAGE MODES (measured, not assumed -- thresholds justified below)
                                                               DonelsonYust2017
 
 RUN
-    py scripts/build_corpus_meta.py
+    py -3 scripts/build_corpus_meta.py
 """
 import hashlib
 import os
@@ -47,7 +47,6 @@ SKILL = os.path.dirname(HERE)
 CORPUS = os.path.join(SKILL, "references", "corpus")
 OUT = os.path.join(SKILL, "references", "corpus_meta.yaml")
 SOURCES = os.path.join(SKILL, "references", "corpus_sources.json")
-PROJECT = os.path.normpath(os.path.join(SKILL, "..", "..", ".."))
 
 import _fieldconfig  # noqa: E402
 import textseg  # noqa: E402  (interleave_ratio)
@@ -59,7 +58,7 @@ import textseg  # noqa: E402  (interleave_ratio)
 # machine, so the wrong manuscript was read silently). Now field-config's
 # manuscript_tex, absolute or relative to the project root; empty = none.
 _ms = _fieldconfig.manuscript_tex()
-MANUSCRIPT = (_ms if os.path.isabs(_ms) else os.path.join(PROJECT, _ms)) \
+MANUSCRIPT = _ms \
     if _ms else ""
 
 # A text this short is not a paper whatever its extraction verdict: an
@@ -210,7 +209,9 @@ def cited_keys():
               % MANUSCRIPT, file=sys.stderr)
         return set()
     keys = set()
-    for m in re.finditer(r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\])*\{([^}]*)\}", tex):
+    # natbib and biblatex commands; same pattern as -polish/scripts/manuscript.py
+    for m in re.finditer(r"\\(?!nocite\b|citetext\b)[A-Za-z]*[Cc]ite[A-Za-z]*\*?(?:\[[^\]]*\])*"
+                         r"\{([^}]*)\}", tex):
         for k in m.group(1).split(","):
             k = k.strip()
             if k:

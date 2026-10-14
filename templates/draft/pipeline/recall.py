@@ -8,7 +8,7 @@ gate: hand-list the top-level chapter heading line numbers for ~10-15 sample
 papers, as {"PaperKey": [line, line, ...], ...}.
 
 RUN
-    py pipeline/recall.py
+    py -3 pipeline/recall.py
 """
 import json
 import os

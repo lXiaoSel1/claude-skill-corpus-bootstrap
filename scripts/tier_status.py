@@ -27,6 +27,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+import _factory as F  # noqa: E402  (slug, ~ expansion, launcher name)
 
 TIER_DESC = {
     0: ("corpus + manifest", "scripts only, minutes"),
@@ -50,16 +52,6 @@ REF_PAPERS = 51
 TOKENS_M = {2: 32.4, 3: 387.6, 4: 68.0}
 HOURS = {2: 0.7, 3: 7.9, 4: 1.4}
 
-# polish steps and the tier each needs ((which instance, tier) or None)
-POLISH_STEPS = [
-    ("a  snapshot", None), ("b  sweep", ("lit", 0)), ("c  rewrite + attest", ("lit", 0)),
-    ("d  /<field>-lit + cohesion_loop", ("lit", 1)), ("d2 opener_check", ("draft", 3)),
-    ("e  source_term_check / pdf_ctx", None), ("f  section G", None),
-    ("g  trial_diff / para_lengths / scan_appositive", ("lit", 0)),
-    ("g  words_compare (optional)", ("draft", 2)), ("h2 sent_diff", None),
-    ("i  compile / counts", None), ("j  render_section", None)]
-
-
 def load_reg(path):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -70,10 +62,8 @@ def load_reg(path):
 
 def canon_status(field, dest, draft):
     """The writing guides in the draft's canon_dir and the drafting pass's cost."""
-    sys.path.insert(0, HERE)
-    import _factory
     import canon_ingest
-    fld = _factory.Field(field, dest)
+    fld = F.Field(field, dest)
     try:
         cp = fld.cfgparse()
         d = cp.as_str(cp.parse(os.path.join(draft, "references", "field-config.yaml"))
@@ -109,6 +99,7 @@ def main():
     ap.add_argument("field")
     ap.add_argument("--dest", default=os.path.dirname(SKILL))
     args = ap.parse_args()
+    args.field, args.dest = F.norm_field(args.field), F.user_path(args.dest)
     lit = os.path.join(args.dest, args.field + "-lit")
     draft = os.path.join(args.dest, args.field + "-draft")
 
@@ -166,15 +157,13 @@ def main():
 
     polish = os.path.normpath(os.path.join(args.dest, args.field + "-polish"))
     if not os.path.isdir(polish):
-        print("\npolish: not stamped (py -3 scripts/stamp.py %s --add polish)"
-              % args.field)
+        print("\npolish: not stamped (%s scripts/stamp.py %s --add polish)"
+              % (F.PY, args.field))
         return
-    have = {"lit": lit_tiers, "draft": draft_tiers}
-    print("\npolish: %s" % polish)
-    for step, need in POLISH_STEPS:
-        ok = need is None or need[1] in have[need[0]]
-        print("  %-46s %s" % (step.replace("<field>", args.field),
-                              "ready" if ok else "needs %s Tier %d" % need))
+    # which polish steps are ready also depends on TeX, the .bbl and the PDFs:
+    # the polish instance's own doctor.py is the one place that checks them
+    print("\npolish: %s\n  which steps are ready: %s %s"
+          % (polish, F.PY, os.path.join(polish, "scripts", "doctor.py")))
 
 
 if __name__ == "__main__":

@@ -58,11 +58,16 @@ proaches` → `approaches`).
 5. One `## PaperKey` section per paper, in input order. A paper with zero
    usable sentences still gets its section header plus `(only 0 usable)` —
    absence must be visible, not silent.
+6. Write your shard to `<{field}-lit>/references/_exemplar_shards/{shard}.md`
+   ({shard} = a name unique to this agent, e.g. `shard-03`). Do not edit
+   `references/exemplars.md` yourself.
 
 ## After all shards return
 
-Concatenate into `references/exemplars.md` with the standard header (count
-tally per move, per-paper section count), record the totals in
-`registry.json` (`exemplars.sections`, `tagged_sentences`), and let
-check_drift assert them from then on. Watch for BOM/zero-width characters at
+Build `references/exemplars.md` from the shards with the lit skill's script, not
+by concatenating them by hand: `py -3 scripts/build_exemplars.py` checks every
+sentence against its paper (dry run), and `py -3 scripts/build_exemplars.py --write`
+writes the file with the standard header (count tally per move, per-paper
+section count). Record the totals in `registry.json` (`exemplars.sections`,
+`tagged_sentences`), and check_drift asserts them from then on. Watch for BOM/zero-width characters at
 section boundaries — a U+FEFF once made 159 sections count as 158.

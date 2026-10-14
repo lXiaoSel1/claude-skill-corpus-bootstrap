@@ -41,7 +41,7 @@ ADJUDICATION MEASUREMENTS (settle canon disagreements with data)
                          claim, with a true denominator.
 
 RUN
-    py scripts/build_cohesion_norms.py
+    py -3 scripts/build_cohesion_norms.py
 """
 import json
 import os

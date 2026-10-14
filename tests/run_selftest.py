@@ -28,6 +28,9 @@ import subprocess
 import sys
 import tempfile
 
+# the in-process imports below load template modules; without this they
+# leave __pycache__ folders in templates/ ("writes nothing outside the temp dir")
+sys.dont_write_bytecode = True
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -956,13 +959,165 @@ def canon_tier4(tmp):
           "missing: %s" % [w for w in want if w not in got])
 
 
+# ---------------------------------------------------------------- part 5
+# 1.3.1: the fixes from the review of the published copy. Unit checks, then a
+# fresh field through stamp -> ingest -> Tier 0 with the inputs that broke.
+def review_fixes(tmp):
+    print("\npart 5: 1.3.1 review fixes")
+    import ast
+    sc = os.path.join(FACTORY, "scripts")
+    ms = fresh_import("manuscript", os.path.join(FACTORY, "templates", "polish", "scripts"))
+    t = (r"\citep{a,b} \citet[see][p.~3]{c} \parencite{d} \textcite{e} \autocite[see][12]{f}"
+         r" \footcite{g} \Citet{h} \citeauthor*{i} \nocite{NO} \citetext{free} \smartcite{m}")
+    keys = set()
+    for m in ms.CITE_KEYS_RE.finditer(t):
+        keys |= {k.strip() for k in m.group(1).split(",")}
+    check("citations: natbib and biblatex commands found, \\nocite and \\citetext not",
+          keys == set("abcdefghim"), str(sorted(keys)))
+    F = fresh_import("_factory", sc)
+    check("user_path expands ~ (PowerShell and cmd do not)",
+          F.user_path("~/x") == os.path.abspath(os.path.expanduser("~/x")))
+    ing = fresh_import("ingest", sc)
+    check("page_count falls back to pdftotext's form feeds",
+          ing.page_count(os.path.join(tmp, "absent.pdf"), "p1\fp2\fp3\f") == 3)
+    old = []
+    for d, dirs, files in os.walk(FACTORY):
+        dirs[:] = [x for x in dirs if x not in ("__pycache__", ".git")]
+        for f in files:
+            if f.endswith(".py"):
+                p = os.path.join(d, f)
+                try:
+                    ast.parse(open(p, encoding="utf-8").read(), feature_version=(3, 8))
+                except SyntaxError:
+                    old.append(os.path.relpath(p, FACTORY))
+    check("every .py parses as Python 3.8", not old, ", ".join(old[:3]))
+    try:
+        import yaml
+    except ImportError:
+        yaml = None
+
+    def front(path):
+        fm = open(path, encoding="utf-8").read().split("---", 2)[1]
+        if yaml:
+            return yaml.safe_load(fm)
+        m = re.search(r'^description: "(.*)"$', fm, re.M)
+        return {"description": m.group(1) if m else None}
+    fs = front(os.path.join(FACTORY, "SKILL.md"))
+    check("factory SKILL.md frontmatter: valid YAML, description <= 1024",
+          fs.get("description") and len(fs["description"]) <= 1024, "%d" % len(fs.get("description") or ""))
+
+    root = os.path.join(tmp, "p5")
+    skills = os.path.join(root, "skills")
+    os.makedirs(skills)
+    st = os.path.join(sc, "stamp.py")
+    rc1, o1 = run([st, "Öko", "--dest", skills])
+    rc2, o2 = run([st, "bad", "--keywords", 'say "hi"', "--dest", skills])
+    check("stamp rejects a non-ASCII slug and keywords with double quotes",
+          rc1 != 0 and "lowercase ASCII" in o1 and rc2 != 0 and "double quotes" in o2
+          and not os.listdir(skills), "%s %s" % (rc1, rc2))
+    rc, out = run([st, "Health-Econ", "--keywords", "injury: costs # claims", "--dest", skills])
+    lit, draft = (os.path.join(skills, "health-econ-" + s) for s in ("lit", "draft"))
+    descs = [front(os.path.join(skills, "health-econ-" + s, "SKILL.md")).get("description") or ""
+             for s in ("lit", "draft", "polish")]
+    check("stamp: 'Health-Econ' -> health-econ; ':' and '#' in keywords keep every description valid",
+          rc == 0 and all(len(d) <= 1024 for d in descs) and "injury: costs # claims" in descs[0]
+          and "injury: costs # claims" in descs[2], out.strip()[-60:])
+
+    br = os.path.join(root, "Papers [2024]")
+    os.makedirs(br)
+    make_pdf(os.path.join(br, "Upper.PDF"), _paper(23))
+    ig = os.path.join(sc, "ingest.py")
+    rc, out = run([ig, lit, "--src", br])
+    corpus = os.path.join(lit, "references", "corpus")
+    check("ingest: a folder with [brackets] and an upper-case .PDF are read",
+          rc == 0 and os.path.isfile(os.path.join(corpus, "Upper.txt")), out.strip()[-60:])
+    srcj = os.path.join(lit, "references", "corpus_sources.json")
+    man = json.load(open(srcj, encoding="utf-8"))
+    del man["Upper"]                       # a run stopped before its record was saved
+    json.dump(man, open(srcj, "w", encoding="utf-8"))
+    rc, out = run([ig, lit, "--src", br])
+    rec = json.load(open(srcj, encoding="utf-8")).get("Upper", {})
+    check("ingest: a text with no record is adopted with QC (words, flags, sha)",
+          rc == 0 and "adopted" in out and rec.get("words", 0) > 1000 and "flags" in rec
+          and rec.get("txt_sha256"), str({k: rec.get(k) for k in ("converter", "words")}))
+    for sub, name in (("a", "Smith2020.pdf"), ("b", "smith2020.pdf")):
+        os.makedirs(os.path.join(root, "coll", sub))
+        make_pdf(os.path.join(root, "coll", sub, name), _paper(24))
+    rc, out = run([ig, lit, "--src", os.path.join(root, "coll"), "--recursive", "--dry-run"])
+    check("ingest: keys differing only in case collide", rc != 0 and "key collision" in out, out.strip()[-60:])
+
+    lib = os.path.join(root, "lib")
+    os.makedirs(lib)
+    make_pdf(os.path.join(lib, "WP2020.pdf"), _paper(25))
+    make_pdf(os.path.join(lib, "Brief2020.pdf"), FIX_D)
+    make_pdf(os.path.join(lib, "Res2021.pdf"), _paper(26))
+    cmap = os.path.join(lit, "references", "corpus_map.csv")
+    with open(cmap, "w", encoding="utf-8", newline="") as fh:
+        fh.write("key,path,group,role,note\n")
+        fh.write("WP2020,%s,,working,type:techreport\n" % os.path.join(lib, "WP2020.pdf"))
+        fh.write("Brief2020,%s,,working,type:techreport\n" % os.path.join(lib, "Brief2020.pdf"))
+        fh.write("Res2021,%s,,research,type:article\n" % os.path.join(lib, "Res2021.pdf"))
+    run([ig, lit, "--map", cmap])
+    rc, out = run([os.path.join(sc, "tier0_accept.py"), "health-econ", "--dest", skills])
+    cp = fresh_import("_cfgparse", os.path.join(lit, "scripts"))
+    term = cp.as_list(cp.parse(os.path.join(lit, "references", "field-config.yaml")).get("terminology_only"))
+    check("tier0: a long working paper stays research, a short one is for terms only",
+          rc == 0 and "Brief2020" in term and "WP2020" not in term, "%s %s" % (rc, term))
+    fld = F.Field("health-econ", skills)
+    fld.add_tier(1)
+    excl = cp.as_list(cp.parse(os.path.join(lit, "references", "field-config.yaml")).get("excluded"))
+    fld.set_list("excluded", [(k, "") for k in excl] + [("WP2020", "test: removed by hand")])
+    rc, out = run([os.path.join(sc, "tier0_accept.py"), "health-econ", "--dest", skills, "--keep-config"])
+    check("tier0 re-run that changes the style-safe papers drops Tier 1",
+          rc == 0 and "Tier 1 is out of date" in out and 1 not in fld.built_tiers(), str(fld.built_tiers()))
+
+    dreg = os.path.join(draft, "references", "registry.json")
+    d = json.load(open(dreg, encoding="utf-8"))
+    keep_tiers = d["built_tiers"]
+    d["built_tiers"] = sorted(set(keep_tiers) | {3})
+    json.dump(d, open(dreg, "w", encoding="utf-8"), indent=1)
+    rc, out = run([os.path.join(draft, "scripts", "check_drift.py")])
+    check("draft check_drift Tier 3 fails on an empty registry",
+          rc == 1 and "FAIL registry sections.chapters recorded" in out
+          and re.search(r"FAIL total Versions == registry", out), out.strip()[-60:])
+    d["built_tiers"] = keep_tiers
+    json.dump(d, open(dreg, "w", encoding="utf-8"), indent=1)
+    sk = open(os.path.join(draft, "SKILL.md"), encoding="utf-8").read()
+    m = re.search(r"state\.py use (.+?) ·", sk)
+    import shlex
+    rc, out = run([os.path.join(draft, "scripts", "state.py"), "use"] + shlex.split(m.group(1) if m else ""))
+    stf = os.path.join(draft, "references", "manuscript-state.md")
+    check("the draft SKILL's state.py example runs",
+          rc == 0 and os.path.isfile(stf) and "opening on the gap" in open(stf, encoding="utf-8").read(),
+          out.strip()[-60:])
+
+    fld.set_scalar("pdftotext", "Z:/no/such/pdftotext.exe")   # any PDF would now fail
+    gd = os.path.join(root, "guides")
+    os.makedirs(gd)
+    with open(os.path.join(gd, "web.html"), "w", encoding="utf-8") as fh:
+        fh.write("<title>Guide</title>" + "".join("<p>%s</p>" % p for p in _paper(27).split("\n\n")))
+    with open(os.path.join(gd, "manual.md"), "w", encoding="utf-8") as fh:
+        fh.write(_paper(28))
+    canon = os.path.join(draft, "references", "canon-sources")
+    os.makedirs(canon)
+    with open(os.path.join(canon, "manual.txt"), "w", encoding="utf-8") as fh:
+        fh.write("A guide put here by hand.\n")
+    rc, out = run([os.path.join(sc, "canon_ingest.py"), "health-econ", "--dest", skills, "--src", gd])
+    check("canon_ingest: web pages and text need no PDF converter; a hand-added text is kept",
+          rc == 0 and os.path.isfile(os.path.join(canon, "web.txt")) and "added by hand" in out
+          and open(os.path.join(canon, "manual.txt"), encoding="utf-8").read() == "A guide put here by hand.\n",
+          out.strip()[-70:])
+    d = open(os.path.join(FACTORY, "templates", "polish", "scripts", "doctor.py"), encoding="utf-8").read()
+    check("polish doctor asks for Python 3.8", "(3, 8)" in d and "(3, 7)" not in d)
+
+
 def main():
     keep = "--keep" in sys.argv
     tmp = tempfile.mkdtemp(prefix="cb-selftest-")
     try:
         # a crash is a FAIL, never an abort -- run against an OLD factory the
         # suite must still report every check it can (qualification run)
-        for part in (unit_tests, integration, onboard_polish, canon_tier4):
+        for part in (unit_tests, integration, onboard_polish, canon_tier4, review_fixes):
             try:
                 part(tmp)
             except Exception as e:  # noqa: BLE001
