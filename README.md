@@ -4,10 +4,13 @@ English | [简体中文](README.zh-CN.md)
 
 **Write papers that read like your field.**
 
-A [Claude Code](https://claude.com/claude-code) skill that learns how a research field writes from the papers you collect, and turns that into two writing assistants for the field:
+A [Claude Code](https://claude.com/claude-code) skill that learns how a research field writes from the papers you collect, and turns that into three writing assistants for the field:
 
 - **`<field>-lit`** reviews a passage you wrote and reports whether it reads like your field's literature: terminology checked against your corpus, register rules, and sentence-to-sentence cohesion. It returns your text with the style fixed and leaves your argument, citations and numbers alone.
 - **`<field>-draft`** drafts one paragraph at a time. Each paragraph follows a structure (a "Version") observed in at least two papers of your corpus, and every claim needs a ledger row with a pasted source line before the sentence is written. It can also reverse-outline a finished section (`--outline`) and trace introduction or abstract claims to the tables that support them (`--trace`).
+- **`<field>-polish`** revises your manuscript one section at a time, in your own `main.tex`. It scans the whole text against the corpus, checks rare words in the cited papers' own PDFs, checks every changed claim against its source, then compiles the manuscript and renders the section. It finds the sections and each citation's PDF by itself, so there is no configuration file to fill in.
+
+**One-step onboarding** builds a field from a manuscript and a library: a PDF folder, a Zotero or JabRef `.bib` export, or PDFs with reading notes. It matches every citation to its PDF and runs Tiers 0 and 1 without stopping.
 
 Nothing is inherited from another field. Term counts, paragraph lengths, cohesion norms, the chapter taxonomy and the verb ladder for attributing claims are all measured on your own corpus.
 
@@ -43,6 +46,14 @@ This project is meant to help everyone write better by making the papers of your
 - Builds a claim ledger before writing: each claim gets a row with the attribution verb and the source line pasted from the paper, and anything it cannot source is flagged with `!!`.
 - Limits attribution verbs to what the source supports, using a verb ladder measured on your corpus ("find that" for results, "note that" when the source is thin).
 - Reverse-outlines a finished section and traces claims in the introduction or abstract to the tables that support them.
+
+**`<field>-polish`, section-by-section revision checked against the sources**
+
+- Scans the whole manuscript against your corpus: words and multi-word frames that no paper uses, and sentences longer than the corpus 90th percentile.
+- Looks up rare words and every domain term in the cited paper's own PDF. A term the paper uses is kept; a term of your own is replaced by one the corpus uses.
+- Reads each sentence for meaning (unclear scope, a comparison with a missing side, a verb stronger than the source) and checks every changed claim against its source.
+- Confirms that numbers, citation keys and source comments did not change, compiles your manuscript, and renders the section with citations as the PDF prints them.
+- Writes to your files only after a snapshot, through exact one-occurrence replacements, and keeps a backup.
 
 ## Examples from a real literature review
 
@@ -109,6 +120,45 @@ More rewrites from the same review, each backed by a corpus count:
 | Industry composition can also alter aggregate results. | 0/51 | Aggregate results also depend on industry composition. ("depend on": 8/51) |
 | Studies controlling for … find similar results. | 0/51 | Results from studies that control for injury type in regression models are consistent with these findings. ("results from": 20/51; "consistent with": 31/51) |
 
+### 4. The same paragraph, written directly and revised with `-polish`
+
+This is the second paragraph of section 2.2 (return to work) in the same review. The first version is the draft Claude wrote without this workflow. The second is what `<field>-polish` produced from it after steps a–j. Citations are shown as the PDF prints them.
+
+**Written directly, without the workflow**
+
+> The clearest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) use data on patients with moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005 and, after controlling for pre-injury employment, discharge functional scores, and demographic factors, find that the odds of being unemployed one year post-injury for minorities are 2.17 times those of Whites. Gary et al. (2009) use patients injured during 1989–2001 from the same database and find that the odds of not being competitively employed for Blacks are 2.61, 2.10, and 3.15 times those of Whites at 1, 2, and 5 years post-injury, respectively, with no narrowing of the gap over time. The pattern holds for spinal cord injury: Arango-Lasprilla et al. (2010) use follow-up data from the SCI Model Systems spanning 1973–2006 and find that at 10 years post-injury, the odds of competitive employment for Whites are 3.02 times those for Blacks and 1.71 times those for Hispanics. Meade et al. (2004) use national SCI data on individuals injured during 1972–2002 and find that the one-year post-injury employment rate is 16.4% for Whites but only 5.9% for Blacks, with race remaining significant after controlling for education and injury characteristics.
+
+**Revised with `-polish`**
+
+> The strongest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) used data on patients with primarily moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005. After controlling for pre-injury employment, Disability Rating Scale scores at discharge, and demographic factors, minorities with TBI had 2.17 times the odds of being unemployed one year post-injury compared with Whites. Gary et al. (2009) used data from the same TBI Model Systems database on patients injured between 1989 and 2001. Blacks had 2.61, 2.10, and 3.15 times the odds of not being competitively employed compared with Whites at 1, 2, and 5 years post-injury, respectively, and this difference did not change significantly over time. A similar pattern is observed for spinal cord injury. Arango-Lasprilla et al. (2010) used SCI Model Systems data on patients interviewed at one-year follow-up during 1973–2006 and found that, at 10 years post-injury, Whites had 3.02 times the odds of competitive employment compared with Blacks and 1.71 times the odds compared with Hispanics. Meade et al. (2004) used U.S. national SCI data on individuals injured between 1972 and 2002 and found that the one-year post-injury employment rate was 16.4% for Whites but only 5.9% for Blacks; after controlling for education and injury characteristics, the difference remained statistically significant.
+
+**What an AI detector reported.** Both versions were pasted into GPTZero (model 4.1o, advanced scan):
+
+| | Written directly | Revised with `-polish` |
+|---|---|---|
+| Length | 209 words | 225 words |
+| Verdict | "We are uncertain about this document. If we had to classify it, it would likely be considered human" | "We are highly confident this text is entirely human" |
+| AI / Mixed / Human | 43% / 0% / 57% | 0% / 0% / 100% |
+
+In the first version GPTZero marked the opening sentence ("The clearest evidence…") and the Meade et al. (2004) sentence as the most AI-like.
+
+![GPTZero on the version written directly: 43% AI, with the first and last sentences highlighted](docs/images/gptzero-before.png)
+
+![GPTZero on the version revised with -polish: 0% AI, 100% human](docs/images/gptzero-after.png)
+
+**What changed.** Four changes come from the cited papers; each was checked against the PDF:
+
+| Written directly | Revised | The paper |
+|---|---|---|
+| patients with moderate-to-severe TBI | patients with **primarily** moderate-to-severe TBI | "Subjects with primarily moderate to severe TBI" (Arango-Lasprilla et al. 2008, p. 1) |
+| discharge functional scores | **Disability Rating Scale** scores at discharge | "after adjusting for preinjury employment status, sex, Disability Rating Scale at discharge, …" (same paper, p. 1) |
+| with no narrowing of the gap over time | this difference **did not change significantly** over time | "for blacks as compared with whites did not change significantly over time" (Gary et al. 2009, p. 6) |
+| follow-up data from the SCI Model Systems spanning 1973–2006 | data on patients **interviewed at one-year follow-up** during 1973–2006 | "who were interviewed during their scheduled 1-year post-injury, follow-up evaluation between 1973 and 2006" (Arango-Lasprilla et al. 2010, p. 3) |
+
+The third row matters because the odds ratios themselves move from 2.61 to 2.10 between years 1 and 2; what the paper tested was whether the change was significant. The other edits are style. The Arango-Lasprilla et al. (2008) and Gary et al. (2009) sentences were each split into a design sentence and a result sentence. The verbs moved to the past tense. "Clearest" (in 0 of the 51 style papers) became "strongest" (in 7), and "minorities with TBI" links back to the sentence before it. All 43 numbers and 9 citation keys of the section are unchanged.
+
+**How to read the detector result.** This is one paragraph scanned once by one detector. Detector scores change between tools and versions, and they do not show who wrote a text. The workflow is built to make a section read like your field's papers and say what its sources say; it has no step aimed at detectors.
+
 ## What it can miss
 
 The same review also turned up these problems:
@@ -117,6 +167,7 @@ The same review also turned up these problems:
 - **A first pass can be too lenient.** In the first round, all 13 section reviews passed, yet the text still used "the authors argue" 12 times (0 of the 51 papers use it), and its median sentence was 44 words long against 25 in the corpus. The review was then redone section by section under stricter rules: a full-text scan, long sentences split, and every term and framing phrase checked again.
 - **"Paper-specific, keep" needs a human check.** `-lit` kept "acute low back sprains" as Graves et al.'s own term. The paper actually says "back sprain/strain", and the final text follows the paper.
 - **Some changes remove meaning.** `-lit` once changed "fairly consistent" to "consistent" and deleted "the resulting"; both words carried meaning, and both changes were reverted.
+- **A phrase the corpus uses can still be wrong in your sentence.** In the section of Example 4, `-polish` kept "After controlling for injury severity and other factors, women were more likely than men…", because 9 papers in the corpus use "after controlling for". In this sentence it is a dangling modifier: the women did not do the controlling. The corpus check confirms the wording, not the grammar.
 
 Check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
 
@@ -142,6 +193,35 @@ The build runs in five tiers. Each tier ends with an acceptance gate: a `check_d
 
 The reading passes run as Claude Code subagents with the prompts in `templates/prompts/`. The taxonomy is induced from your papers rather than assumed, because a wrong taxonomy spoils everything downstream; that is why Tier 2 stops for your approval.
 
+### One-step onboarding
+
+When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Every default decision is printed as a table that you can change and re-run.
+
+| Step | Script | What it does |
+|---|---|---|
+| 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Stamps the field (asking you for a name and keywords) or reuses it, and ingests the matched PDFs |
+| 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, reports and books are used for terminology only, short research entries are excluded |
+| 3 | `calibrate_paragraphs.py` | Chooses the paragraph-length threshold for the corpus by a sweep from 80 to 400 characters |
+| 4 | `tier1_fill.py` | Builds the style layer and fills every Tier 1 number and verdict, so `check_drift` passes with no hand editing |
+| 5 | (Claude) | Reviews one paragraph of your manuscript with `<field>-lit` and shows you the result |
+| 6 | `onboard.py --finish` | Lists which `<field>-polish` steps are ready and estimates the tokens and time for Tiers 2–4, then asks before building them |
+
+### `<field>-polish`, section by section
+
+| Step | What happens | Needs |
+|---|---|---|
+| a | Snapshot the section | the manuscript |
+| b | Scan the whole manuscript against the corpus; the section's findings become the to-do list | Tier 0 |
+| c | Split long sentences; replace framing phrases with ones found in at least 3 papers | Tier 0 |
+| d | Review with `<field>-lit` and grade sentence-to-sentence cohesion | Tier 1 |
+| d2 | Check paragraph openers against how the corpus opens its paragraphs | Tier 3 |
+| e | Look up rare words and domain terms in the cited papers' PDFs | the PDFs |
+| f | Read each sentence for meaning (scope, comparisons, verb strength) | |
+| g | Confirm numbers, citation keys and source comments are unchanged; check paragraph and sentence lengths | Tier 0 |
+| h2 | Check every changed sentence against its source | the PDFs |
+| i | Compile the manuscript (0 warnings) and recount citations | TeX |
+| j | Render the section as readable text for you | a compiled `.bbl` |
+
 ## Token use
 
 Tiers 0 and 1 are scripts and use almost no tokens. Tiers 2 to 4 are reading passes run by Claude subagents, and they are expensive.
@@ -165,12 +245,15 @@ To keep the cost under control:
 - Build Tier 3 one chapter at a time, as the tier table says, and check your usage between chapters.
 - If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
 
+**`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. One-step onboarding itself runs Tiers 0 and 1 as scripts.
+
 ## Requirements
 
 - Claude Code (the reading passes use subagents)
 - Python 3.8 or later
 - **PyMuPDF** (`pip install pymupdf`). Treat it as required: without it (or pypdf) page counts are 0 and scanned PDFs are not flagged.
 - **`pdftotext`** from Poppler, on your PATH or set in `field-config.yaml`
+- For `<field>-polish` step i: a TeX distribution with `pdflatex` or `xelatex`, and `bibtex` or `biber`
 - Optional: PyYAML, pypdf
 
 The documentation uses the Windows launcher `py -3`. On macOS or Linux, use `python3`.
@@ -190,7 +273,7 @@ Run these from the skill folder. The example field is `ecology`.
 ```bash
 cd ~/.claude/skills/corpus-bootstrap
 
-# 1. Create the two skills for the field
+# 1. Create the three skills for the field
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
 # 2. Convert your PDFs: put them in ../ecology-lit/drop/, or read them in place from your library
@@ -205,7 +288,26 @@ py -3 scripts/tier_status.py ecology
 
 Then ask Claude Code for the next tier, for example `/corpus-bootstrap tier 1`. Tiers can be resumed at any point; `tier_status.py` reads the ledger.
 
-`--citation-style` accepts `author-year`, `numeric` or `mixed`. `--keywords` goes into the trigger description of the two new skills.
+`--citation-style` accepts `author-year`, `numeric` or `mixed`. `--keywords` goes into the trigger descriptions of the new skills.
+
+**Or start from a manuscript and your library.** In Claude Code, say `/corpus-bootstrap polish` and give the paths; Claude runs these steps and asks before Tier 2. By hand:
+
+```bash
+# 1. Match every citation to its PDF, stamp the field and ingest
+#    (without --field it stops and asks for a name; --dry-run only builds the index)
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs \
+    --library /path/to/library.bib --field ecology --keywords "population ecology, habitat loss"
+
+# 2. Tier 0 acceptance, the paragraph threshold, Tier 1
+py -3 scripts/tier0_accept.py ecology
+py -3 scripts/calibrate_paragraphs.py ecology
+py -3 scripts/tier1_fill.py ecology
+
+# 3. What works now, and what Tiers 2-4 would cost
+py -3 scripts/onboard.py --finish --field ecology
+```
+
+Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. A field stamped with version 1.1.0 gets the third skill with `py -3 scripts/stamp.py ecology --add polish`.
 
 **You download the papers yourself.** The skill does not fetch, scrape or call any API. Keep your PDFs and corpus text out of any public repository.
 
@@ -232,10 +334,11 @@ Once you have the guides:
 py -3 tests/run_selftest.py
 ```
 
-The self-test runs 65 checks in two parts:
+The self-test runs 106 checks in three parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
+3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script runs on the manuscript, including on a word broken across a PDF line and on a single-file manuscript.
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
 
@@ -246,21 +349,30 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
 - **Windows first.** Documentation and printed hints assume `py -3`. The scripts themselves are cross-platform.
 - **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml`, because two scripts resolve relative paths differently.
 - **Optional modes need agents that are not included.** `<field>-lit --audit` calls a `humanize-auditor` agent, and `<field>-draft` can fork a `claim-verifier` agent. Both are off by default.
+- **`<field>-polish` has known gaps.** Its first end-to-end run (2026-10-14) completed every step and passed every check, and it also found problems that are not fixed yet:
+  - step c needs step e's verdicts on source terms, and the edits from step c must be written before steps d and d2 read the file;
+  - the list of one-off frames (L2b) is long and is mostly ordinary grammar;
+  - when the corpus barely covers a section's topic, the "at least 3 papers" rule cannot be met, and the skill gives no fallback;
+  - `attest.py` reports a multi-word phrase as attested when only a variant of it matched;
+  - the scan counts each citation as a word of sentence length, and reads "OR" (odds ratio) as "or".
 - **"The parent" in the files.** The recipe was first built by hand as a pair of skills for empirical finance writing. Those skills are not part of this repository, and the factory does not need them. Where the files say "the parent", they mean that original pair, and its numbers appear only as illustrations.
 
 ## Repository layout
 
 ```
 SKILL.md                    the skill Claude Code loads
-scripts/                    stamp, ingest, capture, tier_status
+scripts/                    stamp, ingest, capture, tier_status; onboard, tier0_accept,
+                            calibrate_paragraphs, tier1_fill (one-step onboarding)
 templates/lit/              skeleton of <field>-lit
 templates/draft/            skeleton of <field>-draft
+templates/polish/           skeleton of <field>-polish: steps a-j, scripts, an optional settings example
 templates/field-config.yaml the single per-field config both skills read
 templates/prompts/          prompts for the reading passes, with format examples
 references/                 build provenance, an archived (unimplemented) fetch survey, the writing-guide manifest
 tests/run_selftest.py       the self-test
+docs/images/                screenshots used in this README
 ```
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Version 1.1.0 (2026-10-07).
+MIT. See [LICENSE](LICENSE). Version 1.2.0 (2026-10-14).

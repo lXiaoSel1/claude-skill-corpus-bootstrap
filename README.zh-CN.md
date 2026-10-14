@@ -4,10 +4,13 @@
 
 **让你的论文读起来像本领域的文献。**
 
-一个 [Claude Code](https://claude.com/claude-code) skill。它从你为某个研究领域收集的论文里，学会这个领域的写法，再据此生成两个写作助手：
+一个 [Claude Code](https://claude.com/claude-code) skill。它从你为某个研究领域收集的论文里，学会这个领域的写法，再据此生成三个写作助手：
 
 - **`<field>-lit`**：审查你写的一段文字，报告它读起来像不像本领域的文献。它会对照你的语料检查术语，套用文风规则，并检查句与句之间的衔接。改完的文字还给你，论点、引用和数字一律不动。
 - **`<field>-draft`**：一次起草一段。每一段都沿用语料里至少两篇论文用过的结构（叫作一个 “Version”）。每个论断在写成句子之前，必须先在台账里登记一行，贴上出处原文。它还能给写好的章节做反向提纲（`--outline`），也能把引言或摘要里的论断追溯到支撑它的表格（`--trace`）。
+- **`<field>-polish`**：在你自己的 `main.tex` 上一节一节改稿。它对照语料扫描全文，到被引论文的 PDF 里核对少见的词，把每一句改过的论断对回原文，最后编译稿件并把这一节渲染成可读文本。章节和每个引用对应的 PDF 都由它自己找，不用填配置文件。
+
+**一键接入**：给它一份稿件和你的文献库（PDF 文件夹、Zotero 或 JabRef 导出的 `.bib`，或者 PDF 加阅读笔记），它会把每个引用对到 PDF，并一口气跑完第 0、1 关。
 
 所有数字都不从别的领域照搬：术语频次、段落长度、衔接常模、章节分类、引述他人结论时用的动词阶梯，全部在你自己的语料上重新测量。
 
@@ -43,6 +46,14 @@
 - 动笔前先建论断台账：每个论断一行，写明引述动词，并贴上论文原句；找不到出处的标 `!!`。
 - 引述他人结论的动词不能比原文支持的更强，用的是在你的语料上测出的 “动词阶梯”，例如报告结果用 “find that”，原文支持较弱时退到 “note that”。
 - 能给写好的章节做反向提纲，也能把引言或摘要里的论断追溯到支撑它的表格。
+
+**`<field>-polish`：逐节改稿，改完对回原文**
+
+- 对照语料扫描全文：哪些词和多词说法没有一篇论文用过，哪些句子比语料第 90 百分位还长。
+- 到被引论文自己的 PDF 里查少见的词和每个领域术语。论文自己用的术语保留；我们自己的说法换成语料里用的说法。
+- 逐句读意思（范围不清、比较缺一方、动词比原文强），并把每一句改过的论断对回原文。
+- 确认数字、引用 key 和出处注释都没有变，编译你的稿件，按 PDF 里显示的样子渲染这一节的引用。
+- 先存快照，只用“恰好出现一次”的精确替换改你的文件，并保留备份。
 
 ## 真实例子：一份文献综述
 
@@ -109,6 +120,45 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 | Industry composition can also alter aggregate results. | 0/51 | Aggregate results also depend on industry composition.（"depend on"：8/51） |
 | Studies controlling for … find similar results. | 0/51 | Results from studies that control for injury type in regression models are consistent with these findings.（"results from"：20/51；"consistent with"：31/51） |
 
+### 例 4：同一段，直接生成与用 `-polish` 改写
+
+这是同一份综述 2.2 节（复工）的第 2 段。第一版是 Claude 不用这个工作流直接写出的初稿，第二版是 `<field>-polish` 走完 a–j 步之后的结果。引用按 PDF 里显示的样子写出。
+
+**直接生成（未用工作流）**
+
+> The clearest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) use data on patients with moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005 and, after controlling for pre-injury employment, discharge functional scores, and demographic factors, find that the odds of being unemployed one year post-injury for minorities are 2.17 times those of Whites. Gary et al. (2009) use patients injured during 1989–2001 from the same database and find that the odds of not being competitively employed for Blacks are 2.61, 2.10, and 3.15 times those of Whites at 1, 2, and 5 years post-injury, respectively, with no narrowing of the gap over time. The pattern holds for spinal cord injury: Arango-Lasprilla et al. (2010) use follow-up data from the SCI Model Systems spanning 1973–2006 and find that at 10 years post-injury, the odds of competitive employment for Whites are 3.02 times those for Blacks and 1.71 times those for Hispanics. Meade et al. (2004) use national SCI data on individuals injured during 1972–2002 and find that the one-year post-injury employment rate is 16.4% for Whites but only 5.9% for Blacks, with race remaining significant after controlling for education and injury characteristics.
+
+**用 `-polish` 改写后**
+
+> The strongest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) used data on patients with primarily moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005. After controlling for pre-injury employment, Disability Rating Scale scores at discharge, and demographic factors, minorities with TBI had 2.17 times the odds of being unemployed one year post-injury compared with Whites. Gary et al. (2009) used data from the same TBI Model Systems database on patients injured between 1989 and 2001. Blacks had 2.61, 2.10, and 3.15 times the odds of not being competitively employed compared with Whites at 1, 2, and 5 years post-injury, respectively, and this difference did not change significantly over time. A similar pattern is observed for spinal cord injury. Arango-Lasprilla et al. (2010) used SCI Model Systems data on patients interviewed at one-year follow-up during 1973–2006 and found that, at 10 years post-injury, Whites had 3.02 times the odds of competitive employment compared with Blacks and 1.71 times the odds compared with Hispanics. Meade et al. (2004) used U.S. national SCI data on individuals injured between 1972 and 2002 and found that the one-year post-injury employment rate was 16.4% for Whites but only 5.9% for Blacks; after controlling for education and injury characteristics, the difference remained statistically significant.
+
+**AI 检测器的结果。** 两版分别贴进 GPTZero（Model 4.1o，Advanced Scan）：
+
+| | 直接生成 | 用 `-polish` 改写后 |
+|---|---|---|
+| 长度 | 209 词 | 225 词 |
+| 判定 | "We are uncertain about this document. If we had to classify it, it would likely be considered human"（不确定，若要归类大概算人写的） | "We are highly confident this text is entirely human"（高度确信全文是人写的） |
+| AI / Mixed / Human | 43% / 0% / 57% | 0% / 0% / 100% |
+
+第一版里，GPTZero 把开头一句（"The clearest evidence…"）和 Meade et al. (2004) 那一句标为最像 AI 的句子。
+
+![GPTZero 对直接生成版的结果：AI 43%，首句和末句被标出](docs/images/gptzero-before.png)
+
+![GPTZero 对 -polish 改写版的结果：AI 0%，Human 100%](docs/images/gptzero-after.png)
+
+**改了什么。** 有 4 处改动来自被引论文，每处都对照 PDF 核对过：
+
+| 直接生成 | 改写后 | 论文原文 |
+|---|---|---|
+| patients with moderate-to-severe TBI | patients with **primarily** moderate-to-severe TBI | "Subjects with primarily moderate to severe TBI"（Arango-Lasprilla et al. 2008，第 1 页） |
+| discharge functional scores | **Disability Rating Scale** scores at discharge | "after adjusting for preinjury employment status, sex, Disability Rating Scale at discharge, …"（同一篇，第 1 页） |
+| with no narrowing of the gap over time | this difference **did not change significantly** over time | "for blacks as compared with whites did not change significantly over time"（Gary et al. 2009，第 6 页） |
+| follow-up data from the SCI Model Systems spanning 1973–2006 | data on patients **interviewed at one-year follow-up** during 1973–2006 | "who were interviewed during their scheduled 1-year post-injury, follow-up evaluation between 1973 and 2006"（Arango-Lasprilla et al. 2010，第 3 页） |
+
+第三行要紧，是因为比值本身从第 1 年的 2.61 降到了第 2 年的 2.10，“差距没有缩小”并不成立；论文检验的是这个变化是否显著。其余改动属于文风：Arango-Lasprilla et al. (2008) 和 Gary et al. (2009) 两句各拆成一句讲设计、一句讲结果；动词改成过去时；“clearest”（51 篇文风语料里 0 篇用）换成 “strongest”（7 篇用）；“minorities with TBI” 接上了前一句的话题。这一节的 43 个数字和 9 个引用 key 都没有变。
+
+**怎么看检测结果。** 这只是一段文字、一个检测器、扫一次的结果。检测分数随工具和版本变化，也不能说明文字是谁写的。工作流的目标是让一节文字读起来像本领域的论文、说的和原文一致，其中没有任何针对检测器的步骤。
+
 ## 它会漏掉什么
 
 这份综述也暴露了下面这些问题：
@@ -117,6 +167,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - **第一轮审查可能偏松。** 第一轮里 13 节审查全部 “通过”，但全文仍有 12 处 “the authors argue”（51 篇论文里没有一篇这样写），句长中位数是 44 词，语料是 25 词。之后按更严的规则逐节重审：先扫描全文，拆开长句，再把每个术语和框架句重新查一遍。
 - **“论文专用词，保留” 需要人来复核。** `-lit` 认为 “acute low back sprains” 是 Graves et al. 自己的说法，所以保留了；其实原文写的是 “back sprain/strain”，定稿改成了跟原文一致。
 - **有些改动会删掉意思。** `-lit` 曾把 “fairly consistent” 改成 “consistent”，还删掉了 “the resulting”。这两个词都带着意思，两处改动后来都撤回了。
+- **语料里有的说法，放进你的句子也可能是错的。** 在例 4 那一节里，`-polish` 保留了 “After controlling for injury severity and other factors, women were more likely than men…”，因为语料里有 9 篇论文用 “after controlling for”。可这一句是悬垂修饰：做控制的并不是 women。语料核对管的是措辞，管不了语法。
 
 数字和结论请对照原文核对；每个论断从哪里来，可以看 `-draft` 的台账；每处修改都要读过再接受。
 
@@ -142,6 +193,35 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 这几轮阅读由 Claude Code 的子代理执行，提示词在 `templates/prompts/` 里。章节分类从你的论文里归纳，不预设。分类一旦错了，后面全部白做，所以第 2 关会停下来等你批准。
 
+### 一键接入
+
+从一份稿件开始时，`/corpus-bootstrap polish` 会依次运行下面的脚本。每个默认决定都会列成表打印出来，你可以改了再重跑。
+
+| 步 | 脚本 | 做什么 |
+|---|---|---|
+| 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的、有多个候选的、重复版本的和不是英文的。盖章（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
+| 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，报告和书只用于查术语，篇幅很短的研究条目排除 |
+| 3 | `calibrate_paragraphs.py` | 在 80 到 400 个字符之间扫描，选出这份语料的段落长度阈值 |
+| 4 | `tier1_fill.py` | 建好文风层，并填上第 1 关要求的所有数字和判定，`check_drift` 不用手改就能通过 |
+| 5 | （Claude） | 用 `<field>-lit` 审你稿件里的一段，把结果给你看 |
+| 6 | `onboard.py --finish` | 列出 `<field>-polish` 哪些步骤已经能用，估算第 2–4 关的 token 和时间，再问你要不要继续搭 |
+
+### `<field>-polish`：逐节改稿
+
+| 步 | 做什么 | 需要 |
+|---|---|---|
+| a | 给这一节存快照 | 稿件 |
+| b | 对照语料扫描全文，这一节查出的问题就是待办清单 | 第 0 关 |
+| c | 拆长句；把框架句换成至少 3 篇论文用过的说法 | 第 0 关 |
+| d | 用 `<field>-lit` 审稿，并给句间衔接打分 | 第 1 关 |
+| d2 | 对照语料里各段的开头方式检查段首句 | 第 3 关 |
+| e | 到被引论文的 PDF 里查少见的词和领域术语 | PDF |
+| f | 逐句读意思（范围、比较、动词强弱） | |
+| g | 确认数字、引用 key 和出处注释没变；检查段长和句长 | 第 0 关 |
+| h2 | 把每一句改过的论断对回原文 | PDF |
+| i | 编译稿件（0 警告），重新清点引用 | TeX |
+| j | 把这一节渲染成可读文本给你看 | 编译出的 `.bbl` |
+
 ## Token 用量
 
 第 0、1 关只跑脚本，几乎不用 token。第 2 到 4 关要由 Claude 子代理逐篇阅读，非常耗 token。
@@ -165,12 +245,15 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - 第 3 关按工作方式表里说的逐章做，每做完一章看一下用量。
 - 如果只需要审稿功能，做完第 1 关就可以停：`<field>-lit` 从那时起就能用。
 
+**`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。一键接入本身的第 0、1 关只跑脚本。
+
 ## 依赖
 
 - Claude Code（几轮阅读要用子代理）
 - Python 3.8 或更高
 - **PyMuPDF**（`pip install pymupdf`）。请当作必装：没有它（也没有 pypdf）时，页数会记成 0，扫描件也就检测不出来。
 - Poppler 的 **`pdftotext`**，放在 PATH 上，或在 `field-config.yaml` 里写明路径
+- `<field>-polish` 的第 i 步：一套 TeX，含 `pdflatex` 或 `xelatex`，以及 `bibtex` 或 `biber`
 - 可选：PyYAML、pypdf
 
 文档里用的是 Windows 的 `py -3`，macOS 和 Linux 请换成 `python3`。
@@ -190,7 +273,7 @@ git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap ~/.claude/s
 ```bash
 cd ~/.claude/skills/corpus-bootstrap
 
-# 1. 为这个领域生成两个 skill
+# 1. 为这个领域生成三个 skill
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
 # 2. 转换 PDF：放进 ../ecology-lit/drop/，或者直接读你文献库里的原位置
@@ -205,7 +288,26 @@ py -3 scripts/tier_status.py ecology
 
 然后在 Claude Code 里请它进行下一关，例如 `/corpus-bootstrap tier 1`。随时可以中断后接着做，`tier_status.py` 会读取进度台账。
 
-`--citation-style` 可选 `author-year`、`numeric` 或 `mixed`。`--keywords` 会写进两个新 skill 的触发说明。
+`--citation-style` 可选 `author-year`、`numeric` 或 `mixed`。`--keywords` 会写进新 skill 的触发说明。
+
+**也可以从一份稿件和你的文献库开始。** 在 Claude Code 里说 `/corpus-bootstrap polish` 并给出路径，Claude 会依次跑下面几步，到第 2 关之前先问你。手动运行：
+
+```bash
+# 1. 把每个引用对到 PDF，盖章并导入语料
+#    （不加 --field 会停下来问领域名；--dry-run 只建索引）
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs \
+    --library /path/to/library.bib --field ecology --keywords "population ecology, habitat loss"
+
+# 2. 第 0 关验收、段落阈值、第 1 关
+py -3 scripts/tier0_accept.py ecology
+py -3 scripts/calibrate_paragraphs.py ecology
+py -3 scripts/tier1_fill.py ecology
+
+# 3. 现在能用什么，第 2-4 关要花多少
+py -3 scripts/onboard.py --finish --field ecology
+```
+
+之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。用 1.1.0 盖出的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
 
 **论文由你自己下载。** 这个 skill 不抓取、不爬网页，也不调用任何 API。请不要把 PDF 和语料文本放进公开仓库。
 
@@ -232,10 +334,11 @@ py -3 scripts/tier_status.py ecology
 py -3 tests/run_selftest.py
 ```
 
-共 65 项检查，分两部分：
+共 106 项检查，分三部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
+3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 的全部脚本，包括 PDF 里跨行断开的单词和单文件稿件。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
@@ -246,21 +349,30 @@ py -3 tests/run_selftest.py
 - **以 Windows 为主。** 文档和提示信息默认用 `py -3`，脚本本身跨平台。
 - **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径，因为有两个脚本解析相对路径的方式不同。
 - **可选模式需要仓库里没有的 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`。两者默认都关闭。
+- **`<field>-polish` 还有已知的缺口。** 它第一次完整运行（2026-10-14）时每一步都走完了，检查也都通过，同时暴露了一些还没修的问题：
+  - c 步要用到 e 步对原文术语的结论，而 c 步的改动又必须在 d、d2 读文件之前写进去；
+  - 一次性框架（L2b）的清单很长，大多是普通的语法组合；
+  - 语料几乎覆盖不到某一节的主题时，“至少 3 篇”的规则满足不了，skill 也没给退路；
+  - `attest.py` 对多词短语只靠变体命中，也会判为有据；
+  - 扫描算句长时把每个引用算作一个词，还把 “OR”（比值比）当成 “or”。
 - **文件里的 “parent”。** 这套做法最早是为实证金融论文写作手工搭的一对 skill。那一对不在本仓库里，工厂运行也不依赖它们。文件里说的 “parent” 指的就是它们，它们的数字只作为示意出现。
 
 ## 仓库结构
 
 ```
 SKILL.md                    Claude Code 加载的 skill
-scripts/                    stamp、ingest、capture、tier_status
+scripts/                    stamp、ingest、capture、tier_status；onboard、tier0_accept、
+                            calibrate_paragraphs、tier1_fill（一键接入）
 templates/lit/              <field>-lit 的骨架
 templates/draft/            <field>-draft 的骨架
+templates/polish/           <field>-polish 的骨架：a-j 步骤、脚本、可选设置示例
 templates/field-config.yaml 两个 skill 共用的领域配置
 templates/prompts/          各轮阅读的提示词及格式示例
 references/                 搭建来历、一份存档的（未实现的）文献抓取调研、写作指南清单
 tests/run_selftest.py       自检
+docs/images/                README 用到的截图
 ```
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.1.0（2026-10-07）。
+MIT，见 [LICENSE](LICENSE)。版本 1.2.0（2026-10-14）。

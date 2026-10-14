@@ -1,14 +1,14 @@
 ---
 name: corpus-bootstrap
-description: Bootstrap a new research field's writing infrastructure from the user's own downloaded papers. Stamps two skill instances — <field>-lit (style/terminology reviewer against the field's corpus) and <field>-draft (paragraph drafting with evidence ledgers) — structurally identical to the proven mimic-lit/draft-section pair, then builds their reference layers in five acceptance-gated tiers (corpus → style measurements → chapter taxonomy+map → records+Versions → exemplars). Use when user says "我要研究一个新领域", "把文献建成语料库", "bootstrap a corpus for X", "给这个领域盖一套 lit/draft skill", "新领域的文献库". Manual-first: the USER downloads the PDFs (no fetching, no APIs); this skill converts, measures, and orchestrates the model reading passes.
+description: Bootstrap a new research field's writing infrastructure from the user's own downloaded papers. Stamps three skill instances — <field>-lit (style/terminology reviewer against the field's corpus), <field>-draft (paragraph drafting with evidence ledgers) and <field>-polish (section-by-section revision of the user's manuscript against the literature and the cited PDFs) — then builds their reference layers in five acceptance-gated tiers (corpus → style measurements → chapter taxonomy+map → records+Versions → exemplars). One-step onboarding takes a manuscript and a library (PDF folder, Zotero/JabRef .bib, or PDFs plus reading notes), matches every citation to its PDF, and builds Tiers 0-1 with no configuration file. Use when user says "我要研究一个新领域", "把文献建成语料库", "用我的文献库改这篇论文", "bootstrap a corpus for X", "onboard my manuscript and library", "给这个领域盖一套 lit/draft skill", "新领域的文献库". Manual-first: the USER downloads the PDFs (no fetching, no APIs); this skill converts, measures, and orchestrates the model reading passes.
 author: Claude Code Academic Workflow
-version: 1.1.0
-argument-hint: "[stamp <field> | ingest | tier <n> | status <field>]"
+version: 1.2.0
+argument-hint: "[polish <main.tex> <library> | stamp <field> | ingest | tier <n> | status <field>]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Task"]
 ---
 
-# `/corpus-bootstrap` — 给任意领域盖一套 lit + draft 基础设施
+# `/corpus-bootstrap` — 给任意领域盖一套 lit + draft + polish 基础设施
 
 You replay, on a new field's corpus, the exact recipe that built the
 economics/finance pair (`mimic-lit` + `draft-section`). The recipe is
@@ -38,6 +38,42 @@ re-measured on the NEW field's corpus, never inherited from economics.
    the next tier's agent-pass forecast before starting it.
 5. **Parents are read-only.** This skill never modifies `mimic-lit` or
    `draft-section`; templates are frozen copies, parameterized.
+6. **One exception to rule 4, user-approved (2026-10-14):** one-step
+   onboarding runs Tier 0 and Tier 1 back to back without stopping, because
+   both are scripts with default decisions the user can change afterwards.
+   Every decision is printed as a table. Tiers 2–4 still stop: print
+   `tier_status.py`'s token and time estimate and ASK first.
+
+## One-step onboarding (`/corpus-bootstrap polish`)
+
+For "use my library to revise this paper": the user gives a manuscript
+(`main.tex`) and a library — a PDF folder, a Zotero / JabRef / Mendeley `.bib`
+export with `file` fields, or PDFs plus reading notes. No configuration file.
+
+| # | run | what it does |
+|---|---|---|
+| 1 | `py -3 scripts/onboard.py --manuscript <main.tex> --library <folder or .bib> [--library …] [--notes <folder>]` | reads the manuscript; builds `<manuscript dir>/.polish/library-index.json`, matching each cited key to a PDF by the .bib `file` field, a note's PDF field, a PDF named after the key, the DOI, the title, then first author + year; reports unmatched keys, several candidates, duplicate versions, non-English PDFs. `--dry-run` stops here. Without `--field` it exits 3: **ask the user for a field name (and, for a new field, topic keywords)**, then re-run with `--field <slug> --keywords "…"`. It reuses an existing field (stamping only a missing polish) or stamps all three, writes `manuscript_tex`, writes `corpus_map.csv` (corpus key = cite key), runs `ingest.py --map` and `build_corpus_meta.py` |
+| 2 | `py -3 scripts/tier0_accept.py <field>` | default decisions: SCAN / ERROR → excluded; INTERLEAVED → re-extracted with PyMuPDF, else excluded; report / book / misc entries → terminology_only; SHORT research entries → excluded, SHORT entries with no .bib type → terminology_only; non-English → excluded. Writes both configs (read back), rebuilds the manifest, fills `corpus.*`, adds Tier 0, runs check_drift. `--keep-config` after a hand edit |
+| 3 | `py -3 scripts/calibrate_paragraphs.py <field>` | sweeps `para_min_chars` 80–400; most paragraphs with no paper at zero (`--set N` overrides); both configs; sweep table in `para-calibration.md` |
+| 4 | `py -3 scripts/tier1_fill.py <field>` | the three captures and transitions; registry `cohesion.*` and `transitions.*`; the 12 `corpus: TO-MEASURE` verdicts in cohesion-canon.md filled with this corpus's numbers beside the parent's (K10, K11 → `UNMEASURED (judgment)` with the reason); a note in register.md; Tier 1; check_drift |
+| 5 | model | live check: `/<field>-lit` on the manuscript paragraph tier1_fill suggests; show the user its TERMS and REGISTER blocks |
+| 6 | `py -3 scripts/onboard.py --finish --field <field>` | check_drift, the polish doctor (which steps are ready), and tier_status's estimate for Tiers 2–4; **ask before building them** |
+
+Every script is re-runnable. Each refuses to go on when a check fails.
+
+## `<field>-polish`
+
+The third instance (`templates/polish/`): steps a–j of section-by-section
+revision (snapshot, whole-manuscript register sweep, frames, `/<field>-lit`
+and cohesion, paragraph openers, rare words checked in the cited PDFs,
+section G, mechanical diffs, changed claims against their source, compile and
+counts, render). It reads the manuscript structure from `main.tex` itself
+(`\input` files, or headings in a single file) and the PDFs from the library
+index; an optional `.polish/polish.yaml` only overrides thresholds. Steps need
+lit Tier 0–1 (most), draft Tier 3 (paragraph openers) or Tier 2 (an optional
+length comparison); `doctor.py` and `tier_status.py` say which are ready.
+Fields stamped before 1.2.0 get it with `py -3 scripts/stamp.py <field> --add polish`
+(`--lit-dir` / `--draft-dir` when the siblings live elsewhere).
 
 ## The five tiers
 
@@ -60,8 +96,9 @@ it moves the old slices to `references/_slice_backups/<stamp>/` — still run
 `--dry-run` first.
 
 **Manuscript onboarding (outside the tiers).** When the field gets a
-manuscript: set `manuscript_tex`/`manuscript_tables` in both instances'
-field-config.yaml, run `build_evidence_map.py`, initialize
+manuscript: `onboard.py` writes `manuscript_tex` into both instances'
+field-config.yaml (set `manuscript_tables` by hand if there are table files),
+run `build_evidence_map.py`, initialize
 `manuscript-state.md` via `state.py`, fill the register §3/§5 and
 "For this manuscript" slots. Until then those slots stay explicitly empty —
 an instance without a manuscript is normal, not broken.
@@ -97,11 +134,32 @@ an instance without a manuscript is normal, not broken.
 | `references/fetch-research.md` | Archived literature-acquisition survey (not implemented) |
 | `templates/field-config.yaml` | The single per-field config both instances read |
 | `templates/lit/` · `templates/draft/` | The instance skeletons: parameterized parent scripts, tier-aware check_drift, registry templates, stamped SKILL.md preambles |
+| `templates/polish/` | The polish instance: SKILL.md (steps a–j, rules, lessons), scripts, `polish.example.yaml`, the per-section record template, pairs examples, `references/humanizer-G.md` |
+| `scripts/onboard.py` · `tier0_accept.py` · `calibrate_paragraphs.py` · `tier1_fill.py` · `_factory.py` | One-step onboarding (above) |
 | `templates/prompts/` | The five model-pass prompt files (PASS1/PASS2 rules verbatim + three reconstructed) and `examples/` (the parent's format examples the specs point to) |
-| `tests/` | The factory's self-test: unit checks for the 2026-10-07 fixes plus a stamp → Tier 0–1 run on a fixture corpus with planted defects. Run `py -3 tests/run_selftest.py` after editing any template |
+| `tests/` | The factory's self-test: unit checks for the 2026-10-07 fixes, a stamp → Tier 0–1 run on a fixture corpus with planted defects, and (1.2.0) onboarding from a fixture library through Tier 1 plus every polish script. Run `py -3 tests/run_selftest.py` after editing any template |
 
 ## Changelog
 
+- **2026-10-14 (1.2.0)** — one-step onboarding and a third instance,
+  `<field>-polish`. `onboard.py` matches a
+  manuscript's citations to the user's library (bib file field, notes, file
+  name, DOI, title, author + year) and drives Tiers 0–1 through
+  `tier0_accept.py`, `calibrate_paragraphs.py` and `tier1_fill.py` with
+  default decisions; `stamp.py` stamps polish (`--add polish`, `--lit-dir`,
+  `--draft-dir`); `tier_status.py` prints token and time estimates for Tiers
+  2–4 and which polish steps are ready. The polish scripts port the
+  section-revision workflow of a health-services literature review with its paths
+  and project content removed and these fixes: header lines skipped instead
+  of line 1; snapshots beside the manuscript; PDF text with ligatures restored
+  and line-end hyphens joined; sweep controls judged on the phrase itself,
+  frames compared on token boundaries, L2b in FOCUS; cohesion via `--json`;
+  records parsed for every instance format, citations replaced by a
+  placeholder the splitter does not read as an initial; sentence diffs matched
+  by source comment and split before `\citet`; exit code 1 on every failed
+  check, replacements all-or-nothing; citation rendering for spaced keys and
+  several aliases; the user's own main.tex compiled with reruns. Self-test:
+  65 checks unchanged, 41 added.
 - **2026-10-07** — review-driven upgrade after an external two-reviewer
   audit of the factory and its first stamped instance. Shared
   config parser (quotes/comments), ingest from library folders with

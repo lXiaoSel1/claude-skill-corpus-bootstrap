@@ -41,6 +41,25 @@ TIER_DESC = {
 }
 
 
+# Tokens processed (millions) and wall-clock hours per tier, measured from the
+# transcripts of a health-policy build (51 style-safe papers, 2026-10-07):
+# subagent runs per tier (Tier 2 21M, Tier 3 PASS-1 79M + PASS-2 172M, Tier 4
+# 44M) plus the coordinating main session (172M), shared out in proportion.
+# About 96% of it was prompt-cache reads. Scaled linearly by style-safe papers.
+REF_PAPERS = 51
+TOKENS_M = {2: 32.4, 3: 387.6, 4: 68.0}
+HOURS = {2: 0.7, 3: 7.9, 4: 1.4}
+
+# polish steps and the tier each needs ((which instance, tier) or None)
+POLISH_STEPS = [
+    ("a  snapshot", None), ("b  sweep", ("lit", 0)), ("c  rewrite + attest", ("lit", 0)),
+    ("d  /<field>-lit + cohesion_loop", ("lit", 1)), ("d2 opener_check", ("draft", 3)),
+    ("e  source_term_check / pdf_ctx", None), ("f  section G", None),
+    ("g  trial_diff / para_lengths / scan_appositive", ("lit", 0)),
+    ("g  words_compare (optional)", ("draft", 2)), ("h2 sent_diff", None),
+    ("i  compile / counts", None), ("j  render_section", None)]
+
+
 def load_reg(path):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -72,9 +91,10 @@ def main():
     if not lit_reg:
         sys.exit("no stamped instance at %s -- run stamp.py first" % lit)
 
-    tiers = set(int(t) for t in lit_reg.get("built_tiers", []))
-    if draft_reg:
-        tiers |= set(int(t) for t in draft_reg.get("built_tiers", []))
+    lit_tiers = set(int(t) for t in lit_reg.get("built_tiers", []))
+    draft_tiers = set(int(t) for t in draft_reg.get("built_tiers", [])) \
+        if draft_reg else set()
+    tiers = lit_tiers | draft_tiers
 
     corpus = os.path.join(lit, "references", "corpus")
     n_files = len([f for f in os.listdir(corpus) if f.endswith(".txt")]) \
@@ -92,17 +112,41 @@ def main():
     print("field: %s   corpus: %d txt (%d style-safe)   built tiers: %s\n"
           % (args.field, n_files, n, sorted(tiers) or "none"))
     nxt = min(set(range(5)) - tiers, default=None)
+    k = max(n, 1) / float(REF_PAPERS)
     for t in range(5):
         mark = "DONE" if t in tiers else ("NEXT" if t == nxt else "    ")
         name, cost = TIER_DESC[t]
         print("  [%s] Tier %d  %-46s %s"
               % (mark, t, name, cost.format(**costs)))
+        if t in TOKENS_M and t not in tiers:
+            print("  %s          ≈ %.0f million tokens, ≈ %.1f h"
+                  % (" " * 4, TOKENS_M[t] * k, HOURS[t] * k))
+    left = [t for t in TOKENS_M if t not in tiers]
+    if left:
+        print("\ntoken estimate for Tier %s at %d style-safe papers: ≈ %.0f million"
+              " tokens processed (≈ 96%% prompt-cache reads), ≈ %.1f h -- scaled"
+              " from a measured %d-paper health-policy build; ask the user first."
+              % ("-".join(str(t) for t in (left[0], left[-1])) if len(left) > 1
+                 else left[0], n, sum(TOKENS_M[t] for t in left) * k,
+                 sum(HOURS[t] for t in left) * k, REF_PAPERS))
     if nxt is None:
         print("\nall tiers built -- run both instances' check_drift for the"
               " full-green acceptance")
     else:
         print("\nnext tier's driver: see corpus-bootstrap/SKILL.md Tier %d"
               % nxt)
+
+    polish = os.path.normpath(os.path.join(args.dest, args.field + "-polish"))
+    if not os.path.isdir(polish):
+        print("\npolish: not stamped (py -3 scripts/stamp.py %s --add polish)"
+              % args.field)
+        return
+    have = {"lit": lit_tiers, "draft": draft_tiers}
+    print("\npolish: %s" % polish)
+    for step, need in POLISH_STEPS:
+        ok = need is None or need[1] in have[need[0]]
+        print("  %-46s %s" % (step.replace("<field>", args.field),
+                              "ready" if ok else "needs %s Tier %d" % need))
 
 
 if __name__ == "__main__":

@@ -456,13 +456,365 @@ def integration(tmp):
     check("tier_status with --dest", rc == 0 and "NEXT" in out)
 
 
+# ---------------------------------------------------------------- part 3
+# One-step onboarding and <field>-polish (1.2.0). A library of six research
+# PDFs, an agency brief, a scan and a missing paper; a .bib whose entries
+# reach their PDFs by every matching rule; reading notes; a manuscript that
+# \input's two sections. Onboarding runs Tier 0-1 with no hand editing, then
+# every polish script runs on the manuscript.
+_ADJ = ["detailed", "regional", "national", "careful", "longitudinal", "matched", "pooled",
+        "quarterly", "annual", "broad", "narrow", "simple"]
+_TOPIC = ["medical spending", "claim duration", "return to work", "benefit generosity",
+          "provider payment", "treatment delay", "claim denial", "insurer behaviour",
+          "fee schedules", "wage replacement", "case management", "utilization review"]
+_ORD = ["first", "second", "third", "fourth", "fifth"]
+
+
+def _paper(seed, lead="", hyphen=False):
+    """~1,900 words in 28 four-sentence paragraphs; distinct per seed; 'fi'
+    words throughout (the ligature-damage test needs them)."""
+    paras = [lead] if lead else []
+    for i in range(28):
+        a, t = _ADJ[(seed + i) % 12], _TOPIC[(seed * 5 + i) % 12]
+        t2 = _TOPIC[(seed + 3 * i + 1) % 12]
+        s = ["The %s analysis of %s finds significant effects in the %s year of the panel."
+             % (a, t, _ORD[i % 5]),
+             "These effects on %s are larger for back injuries than for fractures in state %d."
+             % (t, seed * 31 + i),
+             "Workers with longer claims file more appeals, and the %s pattern holds for %s."
+             % (_ORD[(i + seed) % 5], t2),
+             "Our estimate for %s is stable across the %s specifications we fit to sample %d."
+             % (t2, a, i + seed)]
+        if hyphen and i == 3:
+            s[1] = "The occupa-\ntional injury rate rose in the %s year of the study." % _ORD[i % 5]
+        paras.append(" ".join(s))
+    return "\n\n".join(paras) + "\n\nReferences\n\nAuthor A (2001) A title. J Econ 1:2-3.\n"
+
+
+_BIB3 = r"""@article{Smith2019,
+  author = {Smith, Ann},
+  title = {Injury and spending},
+  year = {2019},
+  journal = {J Health Econ}
+}
+@article{Lee2020,
+  author = {Lee, Kim and Park, Joon},
+  title = {Reform effects on utilization},
+  year = 2020
+}
+@article{Garcia2018,
+  author = {Garcia, Luis and Lopez, Ana and Diaz, Rosa},
+  title = {Medical Spending After Workplace Injuries},
+  year = {2018}
+}
+@article{Brown2015,
+  author = {Brown, Ed},
+  title = {Claims and courts},
+  year = {2015},
+  doi = {10.5555/brown.2015.7}
+}
+@techreport{Agency2021,
+  author = {{State Agency}},
+  title = {Medical benefits brief},
+  year = {2021},
+  file = {:pdfs/Agency2021.pdf:PDF}
+}
+@article{Scan2017,
+  author = {Old, Pat},
+  title = {Scanned paper},
+  year = {2017},
+  file = {Full Text:pdfs/Scan2017.pdf:application/pdf}
+}
+@article{Note2016,
+  author = {Noted, Ida},
+  title = {Spending after reform},
+  year = {2016}
+}
+@article{Wu:2019,
+  author = {Wu, Li},
+  title = {Payment rules},
+  year = {2019},
+  file = {pdfs/Wu2019.pdf}
+}
+@article{Missing2000,
+  author = {Gone, Al},
+  title = {A paper nobody has},
+  year = {2000}
+}
+"""
+_INTRO3 = r"""% section header comment
+Prior work studies medical care after workplace injuries \citep{Smith2019,Lee2020}. However, costs rise with benefit generosity \citep{Garcia2018}. The authors argue that claim duration matters for costs \citep{Brown2015}. Spending fell, a difference attributed to fee schedules \citep{Wu:2019}.
+
+\citet{Smith2019} find that the occupational injury rate rose by 12 percent. % Smith2019 p.3
+The agency reports that spending grew 2.3 percent \citepalias{Agency2021}. % Agency2021 p.1
+"""
+_RES3 = r"""% results
+Spending rose after the reform \citep{Note2016,Scan2017}. The authors argue that this pattern is general \citep{Missing2000}. We find similar effects in every state.
+"""
+_MAIN3 = r"""\documentclass{article}
+\usepackage{natbib}
+\defcitealias{Agency2021}{State Agency, 2021}
+\begin{document}
+\section{Introduction}\label{sec:intro}
+\input{sections/intro}
+\section{Results}\label{sec:results}
+\input{sections/results}
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}
+"""
+_BBL3 = r"""\begin{thebibliography}{9}
+\bibitem[Smith(2019)]{Smith2019}
+Smith.
+\bibitem[Lee and Park(2020)]{Lee2020}
+Lee.
+\bibitem[Garcia et~al.(2018)Garcia, Lopez, and Diaz]{Garcia2018}
+Garcia.
+\bibitem[Brown(2015)]{Brown2015}
+Brown.
+\bibitem[{State Agency}(2021)]{Agency2021}
+Agency.
+\bibitem[Old(2017)]{Scan2017}
+Old.
+\bibitem[Noted(2016)]{Note2016}
+Noted.
+\bibitem[Wu(2019)]{Wu:2019}
+Wu.
+\bibitem[Gone(2000)]{Missing2000}
+Gone.
+\end{thebibliography}
+"""
+
+
+def onboard_polish(tmp):
+    print("\npart 3: one-step onboarding -> Tier 0-1 -> every <field>-polish script")
+    sc = os.path.join(FACTORY, "scripts")
+    root = os.path.join(tmp, "p3")
+    lib, other, notes = (os.path.join(root, "library", "pdfs"), os.path.join(root, "library", "other"),
+                         os.path.join(root, "notes"))
+    ms_dir = os.path.join(root, "paper")
+    skills = os.path.join(root, "skills")
+    for d in (lib, other, notes, os.path.join(ms_dir, "sections"), skills):
+        os.makedirs(d)
+    make_pdf(os.path.join(lib, "Smith2019.pdf"), _paper(1, hyphen=True))
+    make_pdf(os.path.join(lib, "lee_2020_reform.pdf"), _paper(2))
+    make_pdf(os.path.join(lib, "paper3.pdf"), _paper(3, lead="Medical Spending After Workplace Injuries"))
+    make_pdf(os.path.join(lib, "download (1).pdf"), _paper(4, lead="https://doi.org/10.5555/brown.2015.7"))
+    make_pdf(os.path.join(lib, "Agency2021.pdf"), FIX_D)
+    make_pdf(os.path.join(lib, "Scan2017.pdf"), "", scan=True)
+    make_pdf(os.path.join(lib, "Wu2019.pdf"), _paper(6))
+    make_pdf(os.path.join(other, "n16.pdf"), _paper(5))
+    with open(os.path.join(notes, "Note2016.md"), "w", encoding="utf-8") as fh:
+        fh.write("---\n对应PDF: ../library/other/n16.pdf\n---\n"
+                 "- \"medical spending rose sharply after the reform\" (p.4)\n")
+    with open(os.path.join(root, "library", "refs.bib"), "w", encoding="utf-8") as fh:
+        fh.write(_BIB3)
+    shutil.copy(os.path.join(root, "library", "refs.bib"), os.path.join(ms_dir, "refs.bib"))
+    for name, text in (("main.tex", _MAIN3), ("sections/intro.tex", _INTRO3),
+                       ("sections/results.tex", _RES3)):
+        with open(os.path.join(ms_dir, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+    main_tex = os.path.join(ms_dir, "main.tex")
+
+    ob = fresh_import("onboard", sc)
+    ck = ob.corpus_keys({"abc", "ABC", "Wu:2019"})
+    check("onboard: corpus keys sanitised and unique ignoring case",
+          ck["Wu:2019"] == "Wu_2019" and ck["abc"].lower() != ck["ABC"].lower(), str(ck))
+    e = {"fields": {"file": r":C\:\\lib\\x.pdf:PDF;Supp:sub/s.pdf:application/pdf"}, "bib": "/b/refs.bib"}
+    fs = [p.replace("\\", "/") for p in ob.bib_files(e)]
+    check("onboard: JabRef escaped drive + Zotero relative file fields parsed",
+          len(fs) == 2 and fs[0].lower().startswith("c:") and fs[1].endswith("sub/s.pdf"), str(fs))
+
+    lib_bib = os.path.join(root, "library", "refs.bib")
+    base = [os.path.join(sc, "onboard.py"), "--manuscript", main_tex, "--library", lib,
+            "--library", lib_bib, "--notes", notes, "--dest", skills]
+    rc, out = run(base + ["--dry-run"])
+    idx = json.load(open(os.path.join(ms_dir, ".polish", "library-index.json"), encoding="utf-8"))["keys"]
+    meth = {k: v["method"] for k, v in idx.items()}
+    want = {"Smith2019": "filename", "Lee2020": "author-year", "Garcia2018": "title",
+            "Brown2015": "doi", "Agency2021": "bib-file", "Scan2017": "bib-file",
+            "Note2016": "note", "Wu:2019": "bib-file", "Missing2000": "unmatched"}
+    check("onboard --dry-run: every matching rule hit as planted (9 keys)", rc == 0 and meth == want,
+          str({k: v for k, v in meth.items() if want.get(k) != v}))
+    check("onboard --dry-run: stamps nothing", not os.listdir(skills))
+    rc, out = run(base)
+    check("onboard without --field asks for a name (exit 3)", rc == 3 and "--field" in out, str(rc))
+    rc, out = run(base + ["--field", "fx3"])
+    check("onboard for a new field asks for keywords (exit 3)", rc == 3, str(rc))
+    rc, out = run(base + ["--field", "fx3", "--keywords", "workplace injury"])
+    lit, draft, pol = (os.path.join(skills, "fx3-" + s) for s in ("lit", "draft", "polish"))
+    check("onboard stamps lit, draft and polish and ingests the matched PDFs",
+          rc == 0 and os.path.isdir(pol) and os.path.isfile(os.path.join(lit, "references", "corpus", "Wu_2019.txt"))
+          and os.path.isfile(os.path.join(lit, "references", "corpus_meta.yaml")), out.strip()[-80:])
+    inst = json.load(open(os.path.join(pol, "references", "instance.json"), encoding="utf-8"))
+    check("polish instance.json names its siblings", inst.get("lit_dir") == "../fx3-lit", str(inst))
+    psk = open(os.path.join(pol, "SKILL.md"), encoding="utf-8").read()
+    left = [f for f in glob.glob(os.path.join(pol, "**", "*"), recursive=True)
+            if os.path.isfile(f) and "{{" in open(f, encoding="utf-8", errors="replace").read()]
+    check("polish SKILL.md stamped (name fx3-polish, keywords), no {{tokens}} left anywhere",
+          psk.startswith("---\nname: fx3-polish\n") and "workplace injury" in psk and not left, str(left[:2]))
+    cp = fresh_import("_cfgparse", os.path.join(lit, "scripts"))
+    mts = [cp.parse(os.path.join(d, "references", "field-config.yaml")).get("manuscript_tex") for d in (lit, draft)]
+    check("manuscript_tex written into both field-configs",
+          mts == [main_tex.replace("\\", "/")] * 2, str(mts))
+
+    rc, out = run([os.path.join(sc, "tier0_accept.py"), "fx3", "--dest", skills])
+    cfg = [open(os.path.join(d, "references", "field-config.yaml"), encoding="utf-8").read() for d in (lit, draft)]
+    parsed = [cp.parse(os.path.join(d, "references", "field-config.yaml")) for d in (lit, draft)]
+    check("tier0_accept: scan excluded, report terminology-only, in BOTH configs",
+          rc == 0 and all(p.get("excluded") == ["Scan2017"] and p.get("terminology_only") == ["Agency2021"]
+                          for p in parsed), "%s %s" % (rc, [(p.get("excluded"), p.get("terminology_only")) for p in parsed]))
+    reg = json.load(open(os.path.join(lit, "references", "registry.json"), encoding="utf-8"))
+    check("tier0_accept: denominators filled, Tier 0 in both registries",
+          reg["corpus"]["style_safe"] == 6 and 0 in reg["built_tiers"]
+          and 0 in json.load(open(os.path.join(draft, "references", "registry.json"), encoding="utf-8"))["built_tiers"],
+          str(reg["corpus"]))
+    rc, out = run([os.path.join(sc, "tier0_accept.py"), "fx3", "--dest", skills, "--keep-config"])
+    after = [open(os.path.join(d, "references", "field-config.yaml"), encoding="utf-8").read() for d in (lit, draft)]
+    check("tier0_accept --keep-config is idempotent", rc == 0 and after == cfg)
+
+    rc, out = run([os.path.join(sc, "calibrate_paragraphs.py"), "fx3", "--dest", skills])
+    vals = [cp.parse(os.path.join(d, "references", "field-config.yaml")).get("para_min_chars") for d in (lit, draft)]
+    check("calibrate_paragraphs: a value chosen with no paper at zero, both configs agree",
+          rc == 0 and vals[0] == vals[1] and "no paper at zero" in out, "%s %s" % (vals, out.strip()[-70:]))
+    rc, out = run([os.path.join(sc, "tier1_fill.py"), "fx3", "--dest", skills])
+    canon = open(os.path.join(lit, "references", "cohesion-canon.md"), encoding="utf-8").read()
+    check("tier1_fill: check_drift tiers 0-1 green, no TO-MEASURE left",
+          rc == 0 and "TO-MEASURE" not in canon and canon.count("; parent-econ: ") == 12,
+          out.strip().splitlines()[-1][:70] if out.strip() else "")
+    rc2, out2 = run([os.path.join(sc, "tier1_fill.py"), "fx3", "--dest", skills])
+    canon2 = open(os.path.join(lit, "references", "cohesion-canon.md"), encoding="utf-8").read()
+    regmd = open(os.path.join(lit, "references", "register.md"), encoding="utf-8").read()
+    check("tier1_fill re-run refills from the parent copy; one register note",
+          rc2 == 0 and canon2 == canon and regmd.count("TIER 1 MEASURED") == 1)
+    rc, out = run([os.path.join(lit, "scripts", "check_drift.py")])
+    check("lit check_drift green at tiers 0-1", rc == 0, out.strip().splitlines()[-1][:60])
+    rc, out = run([os.path.join(sc, "onboard.py"), "--finish", "--field", "fx3", "--dest", skills])
+    check("onboard --finish: doctor + token estimate, asks before Tier 2-4",
+          rc == 0 and "ASK THE USER" in out and "million tokens" in out, out.strip()[-60:])
+
+    # ---- polish scripts on the onboarded manuscript ----------------------------
+    ps = os.path.join(pol, "scripts")
+
+    def prun(script, *args):
+        return run([os.path.join(ps, script)] + list(args), cwd=root)
+    with open(os.path.join(ms_dir, "main.bbl"), "w", encoding="utf-8") as fh:
+        fh.write(_BBL3)
+    os.makedirs(os.path.join(ms_dir, ".polish"), exist_ok=True)
+    yml = os.path.join(ms_dir, ".polish", "polish.yaml")
+    with open(yml, "w", encoding="utf-8") as fh:
+        fh.write("sweep_controls:\n  - the authors argue\n  - against the backdrop\n")
+    rc, out = prun("doctor.py")
+    check("polish doctor: manuscript found, steps listed", rc == 0 and "snapshot.py" in out and "ready" in out)
+    rc, out = prun("snapshot.py", "base")
+    check("polish snapshot: both sections saved",
+          rc == 0 and os.path.isfile(os.path.join(ms_dir, ".polish", "snapshots", "base", "intro.tex")))
+    rc, out = prun("snapshot.py", "base")
+    check("polish snapshot refuses to overwrite", rc != 0)
+    rc, out = prun("sweep.py", "intro")
+    check("polish sweep: FOCUS listed; a control absent from the draft still CAUGHT",
+          "FOCUS intro" in out and "CAUGHT  'against the backdrop'" in out,
+          out.strip()[-90:])
+    with open(yml, "w", encoding="utf-8") as fh:
+        fh.write("sweep_controls:\n  - the authors argue\n  - in the first year\n")
+    rc, out = prun("sweep.py")
+    check("polish sweep: a control the corpus attests is MISSED -> exit 1", rc == 1 and "MISSED" in out)
+    os.remove(yml)
+    rc, out = prun("cohesion_loop.py", "intro")
+    check("polish cohesion_loop: --json digest per paragraph", rc == 0 and "joins:" in out, out.strip()[-60:])
+    rc, out = prun("source_term_check.py", "Smith2019", "occupational injury")
+    hits = re.search(r"Smith2019\s+occupational injury\s+(\d+)", out)
+    check("polish source_term_check: a word broken at a line end matches (occupa-/tional)",
+          hits and int(hits.group(1)) >= 1, hits.group(0) if hits else out[:60])
+    rc, out = prun("source_term_check.py", "Missing2000", "spending")
+    check("polish source_term_check: no PDF -> NO PDF TEXT, exit 1", rc == 1 and "NO PDF TEXT" in out)
+    rc, out = prun("pdf_ctx.py", "Wu:2019", "fee schedules", "40")
+    m = re.search(r"Wu:2019: (\d+) match", out)
+    check("polish pdf_ctx: a colon key reaches its PDF", rc == 0 and m and int(m.group(1)) >= 1,
+          out.strip().splitlines()[-1][:60])
+    rc, out = prun("note_terms.py", "Note2016", "spending")
+    check("polish note_terms: quote with its page", rc == 0 and "p.4" in out)
+    rc, out = prun("scan_appositive.py", "intro")
+    check("polish scan_appositive: ', a difference attributed' found", "a difference attributed" in out)
+    rc, out = prun("para_lengths.py")
+    check("polish para_lengths runs (paragraphs, distribution)", "paragraphs:" in out and "distribution" in out,
+          out.strip()[:60])
+    rc, out = prun("words_compare.py")
+    check("polish words_compare: no slices -> skipped, not a crash", rc == 0 and "skipped" in out)
+    rc, out = prun("render_section.py", "intro")
+    check("polish render_section: labels from the .bbl and the alias",
+          rc == 0 and "(Smith, 2019; Lee and Park, 2020)" in out and "Smith (2019) find" in out
+          and "(State Agency, 2021)" in out, out[:80])
+    rc, out = prun("counts.py")
+    rc2, out2 = prun("counts.py")
+    check("polish counts: baseline recorded, then OK", rc == 0 and rc2 == 0 and "baseline recorded" in out
+          and "page_comments" in out2)
+    pairs = os.path.join(root, "pairs.txt")
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("The authors argue that claim duration matters for costs \\citep{Brown2015}\n>>>\n"
+                 "\\citet{Brown2015} suggest that claim duration matters for costs\n")
+    rc, out = prun("rep.py", "intro", pairs)
+    intro_now = open(os.path.join(ms_dir, "sections", "intro.tex"), encoding="utf-8").read()
+    check("polish rep: one exact replacement, LaTeX intact", rc == 0 and "\\citet{Brown2015} suggest" in intro_now)
+    rc, out = prun("trial_diff.py", "base")
+    check("polish trial_diff: numbers, comments, keys MATCH -> exit 0", rc == 0 and "DIFF" not in out, out.strip()[-60:])
+    rc, out = prun("sent_diff.py", "base", "intro")
+    check("polish sent_diff: the changed sentence as - / +",
+          rc == 0 and "- The authors argue" in out and "+ \\citet{Brown2015} suggest" in out)
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("FILE intro\nrose by 12 percent\n>>>\nrose by 13 percent\n===\nFILE results\n"
+                 "no such text\n>>>\nanything\n")
+    rc, out = prun("rep_multi.py", pairs)
+    check("polish rep_multi: one bad pair -> exit 1, nothing written",
+          rc == 1 and open(os.path.join(ms_dir, "sections", "intro.tex"), encoding="utf-8").read() == intro_now)
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("FILE intro\nrose by 12 percent\n>>>\nrose by 13 percent\n")
+    prun("rep_multi.py", pairs)
+    rc, out = prun("trial_diff.py", "base", "intro")
+    check("polish trial_diff: a changed number -> DIFF, exit 1", rc == 1 and "new-only {'13': 1}" in out,
+          out.strip()[-60:])
+    reg_d = os.path.join(draft, "references", "registry.json")
+    d = json.load(open(reg_d, encoding="utf-8"))
+    d["built_tiers"] = sorted(set(d["built_tiers"]) | {3})
+    json.dump(d, open(reg_d, "w", encoding="utf-8"), indent=1)
+    with open(os.path.join(draft, "references", "records", "introduction.md"), "w", encoding="utf-8") as fh:
+        fh.write("# introduction - record\n\n### Smith2019  introduction 1 paragraphs\n\n"
+                 "¶1 opens on costs\n> \"However, costs rise with benefit generosity in most states.\"\n"
+                 "1 sentences\n\n### NotAPaper  stray heading\n\n¶1 x\n> \"However, this must not count.\"\n")
+    rc, out = prun("opener_check.py", "intro")
+    check("polish opener_check: corpus openers from records; 'However' 1/1",
+          rc == 0 and "'However'" in out and "->  1/1" in out, out.strip()[-60:])
+
+    # single-file manuscript: sections cut at \section, edits stay inside a section
+    single = os.path.join(ms_dir, "single.tex")
+    body = open(main_tex, encoding="utf-8").read()
+    body = body.replace("\\input{sections/intro}", open(os.path.join(ms_dir, "sections", "intro.tex"),
+                                                        encoding="utf-8").read()
+                        + "We find similar effects in every state.\n")
+    body = body.replace("\\input{sections/results}", _RES3)
+    with open(single, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    rc, out = prun("snapshot.py", "s1", "--manuscript", single)
+    rc2, out2 = prun("trial_diff.py", "s1", "--manuscript", single)
+    check("polish single-file: sections cut at \\section (intro, results); snapshot + trial_diff",
+          rc == 0 and rc2 == 0 and "== intro" in out2 and "== results" in out2, out2.strip()[-60:])
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("We find similar effects in every state.\n>>>\nWe find the same effects in every state.\n")
+    rc, out = prun("rep.py", "results", pairs, "--manuscript", single)
+    t = open(single, encoding="utf-8").read()
+    check("polish rep on a heading range: text in two sections, replaced only in the one named",
+          rc == 0 and t.count("We find similar effects in every state.") == 1
+          and t.index("We find similar effects") < t.index("\\section{Results}")
+          and t.count("We find the same effects in every state.") == 1, out.strip()[-60:])
+
+
 def main():
     keep = "--keep" in sys.argv
     tmp = tempfile.mkdtemp(prefix="cb-selftest-")
     try:
         # a crash is a FAIL, never an abort -- run against an OLD factory the
         # suite must still report every check it can (qualification run)
-        for part in (unit_tests, integration):
+        for part in (unit_tests, integration, onboard_polish):
             try:
                 part(tmp)
             except Exception as e:  # noqa: BLE001

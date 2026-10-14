@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 """Stamp a new field's skill instances from the templates.
 
-Creates <dest>/<field>-lit/ and <dest>/<field>-draft/ (dest defaults to the
-skills directory holding this factory), copies the templates, substitutes
-{{FIELD}} / {{FIELD_KEYWORDS}} / {{CITATION_STYLE}} / {{CANON_DIR}} tokens (prompts included),
-writes field-config.yaml into BOTH instances' references/, creates the working
-directories every tier writes into, and initializes each registry with
-built_tiers=[].
+Creates <dest>/<field>-lit/, <dest>/<field>-draft/ and <dest>/<field>-polish/
+(dest defaults to the skills directory holding this factory), copies the
+templates, substitutes {{FIELD}} / {{FIELD_KEYWORDS}} / {{CITATION_STYLE}} /
+{{CANON_DIR}} tokens (prompts included), writes field-config.yaml into the
+lit and draft instances' references/, creates the working directories every
+tier writes into, and initializes each registry with built_tiers=[]. The
+polish instance gets references/instance.json naming its two siblings.
+
+--add polish stamps only <field>-polish, next to an existing field (fields
+stamped before 1.2.0). --lit-dir / --draft-dir point it at siblings that live
+somewhere else.
 
 Refuses to overwrite an existing instance (delete it yourself first -- a
 stamped instance accumulates measured state that a re-stamp would destroy).
 
 RUN
     py -3 scripts/stamp.py <field-slug> [--citation-style author-year|numeric|mixed] [--dest <skills-dir>] [--keywords "..."]
+    py -3 scripts/stamp.py <field-slug> --add polish [--dest <skills-dir>] [--lit-dir D --draft-dir D]
     e.g.  py -3 scripts/stamp.py ecology --citation-style mixed --dest ~/.claude/skills
 """
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -62,6 +69,23 @@ def copy_tree(src, dst, field, style):
                 shutil.copy2(src_f, dst_f)
 
 
+def stamp_polish(polish, field, args, lit, draft):
+    """<field>-polish: the templates, plus references/instance.json naming the
+    siblings -- relative when they sit next to it, absolute when given."""
+    copy_tree(os.path.join(TEMPLATES, "polish"), polish, field,
+              args.citation_style)
+    inst = {"field": field,
+            "lit_dir": os.path.abspath(args.lit_dir) if args.lit_dir
+            else os.path.relpath(lit, polish).replace("\\", "/"),
+            "draft_dir": os.path.abspath(args.draft_dir) if args.draft_dir
+            else os.path.relpath(draft, polish).replace("\\", "/")}
+    os.makedirs(os.path.join(polish, "references"), exist_ok=True)
+    with open(os.path.join(polish, "references", "instance.json"), "w",
+              encoding="utf-8", newline="\n") as fh:
+        json.dump(inst, fh, indent=1)
+        fh.write("\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("field", help="kebab-case field slug, e.g. ecology")
@@ -72,6 +96,12 @@ def main():
                     help="topic words for the SKILL.md descriptions, so this pair"
                          " does not collide with sibling instances' triggers"
                          " (e.g. \"population ecology, habitat loss\")")
+    ap.add_argument("--add", choices=["polish"],
+                    help="stamp only this instance next to an existing field")
+    ap.add_argument("--lit-dir", help="the <field>-lit the polish instance uses"
+                    " (default: <dest>/<field>-lit)")
+    ap.add_argument("--draft-dir", help="the <field>-draft the polish instance uses"
+                    " (default: <dest>/<field>-draft)")
     args = ap.parse_args()
     KEYWORDS[0] = args.keywords.strip()
     field = args.field.strip().lower()
@@ -83,7 +113,18 @@ def main():
 
     lit = os.path.join(dest, field + "-lit")
     draft = os.path.join(dest, field + "-draft")
-    for d in (lit, draft):
+    polish = os.path.join(dest, field + "-polish")
+    if args.add == "polish":
+        lit_dir = os.path.abspath(args.lit_dir) if args.lit_dir else lit
+        if not os.path.isfile(os.path.join(lit_dir, "references", "registry.json")):
+            sys.exit("--add polish: no <field>-lit at %s (stamp the field first, or"
+                     " pass --lit-dir)" % lit_dir)
+        if os.path.exists(polish):
+            sys.exit("refusing to overwrite existing instance: " + polish)
+        stamp_polish(polish, field, args, lit, draft)
+        print("stamped:\n  " + polish)
+        return
+    for d in (lit, draft, polish):
         if os.path.exists(d):
             sys.exit("refusing to overwrite existing instance: " + d
                      + "\n  (a stamped instance holds measured state; delete"
@@ -117,10 +158,12 @@ def main():
     # tokens substituted like every other text file
     copy_tree(os.path.join(TEMPLATES, "prompts"),
               os.path.join(draft, "prompts"), field, args.citation_style)
+    stamp_polish(polish, field, args, lit, draft)
 
     print("stamped:")
     print("  " + lit)
     print("  " + draft)
+    print("  " + polish)
     print("next (Tier 0): convert PDFs, either from drop/ or straight from a"
           " library folder:")
     print("  py -3 %s %s [--src <pdf-folder> --recursive --map <keys.csv>]"

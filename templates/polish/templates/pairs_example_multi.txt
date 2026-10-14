@@ -1,0 +1,13 @@
+FILE results
+Men had higher claim rates than women, a difference attributed mainly to occupation \citep{Author2015}
+>>>
+Men had higher claim rates than women. \citet{Author2015} attributed this difference mainly to occupation
+===
+than for the comparison group, a marginally significant difference \citep{Author2012}
+>>>
+than for the comparison group, although the difference was only marginally significant \citep{Author2012}
+===
+FILE discussion
+a gap that narrowed after adjustment
+>>>
+and the gap narrowed after adjustment

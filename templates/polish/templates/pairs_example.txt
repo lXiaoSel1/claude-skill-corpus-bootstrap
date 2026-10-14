@@ -1,0 +1,7 @@
+Two studies find higher costs for comparable cases when the program pays
+>>>
+Two studies find that costs for comparable cases are higher when the program pays
+===
+Using national survey data, \citet{Author2020} report that enrollment rose, a change concentrated among younger households
+>>>
+Using national survey data, \citet{Author2020} report that enrollment rose, mostly among younger households

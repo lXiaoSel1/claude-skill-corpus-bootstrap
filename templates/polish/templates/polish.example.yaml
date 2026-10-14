@@ -1,0 +1,41 @@
+# polish.yaml -- OPTIONAL overrides for {{FIELD}}-polish. Nothing here is required:
+# every value below is the default, read from the manuscript and the sibling
+# skills when the file is absent. To change one, copy this file to
+# <manuscript dir>/.polish/polish.yaml (or <manuscript dir>/polish.yaml), uncomment
+# the line, and edit it. An unknown key is an error, not ignored.
+
+# --- how the manuscript is cut into sections --------------------------------
+# A manuscript that \input's one file per section needs nothing. A single-file
+# manuscript is cut at this heading level (part, chapter, section, subsection).
+# split_level: section
+
+# --- paragraph and sentence rules (para_lengths.py) -------------------------
+# max_sentences: 9          # a paragraph over this many sentences -> split it
+# uniform_run: 3            # this many consecutive paragraphs with equal counts -> flag
+# max_words: auto           # a longer sentence -> shorten it; auto = corpus P90
+# min_words: 3              # a "sentence" needs this many words to count
+
+# --- register sweep (sweep.py) ----------------------------------------------
+# Phrases a reviewer knows must be flagged. Replace them with phrases your own
+# drafts got past a reviewer before; a MISSED control disqualifies the sweep.
+# sweep_controls:
+#   - the authors argue
+#   - against the backdrop
+#   - must first be understood
+# sweep_min_freq: 2         # L2 frames: used at least this often in the draft
+# sweep_common_df: 3        # L2: every word in at least this many corpus papers
+# sweep_very_common_df: 15  # L2b: every word in at least this many corpus papers
+
+# --- other steps ------------------------------------------------------------
+# opener_max_lead_words: 4  # opener_check: words before the first comma that count as a connective
+# cohesion_section:         # cohesion_loop norm cell; default = the lit field-config intro_job
+# notes_dir:                # reading notes (one <KEY>.md per paper); default = the onboarding --notes folder
+# notes_pdf_field: 对应PDF   # the note field that holds the paper's PDF path
+# library_index: .polish/library-index.json
+# snapshot_dir: .polish/snapshots
+# compile_engine: auto      # pdflatex | xelatex | lualatex
+# bib_engine: auto          # bibtex | biber | none
+# expected_cited_keys:      # counts.py; default = the baseline its first run records
+# expected_page_comments:
+# expected_bibitems:
+# page_comment_regex: '(?<!\\)%\s*[A-Za-z][\w\-:]*\s+p\.\s?\d'
