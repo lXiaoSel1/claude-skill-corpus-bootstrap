@@ -11,6 +11,8 @@ A [Claude Code](https://claude.com/claude-code) skill that learns how a research
 
 Nothing is inherited from another field. Term counts, paragraph lengths, cohesion norms, the chapter taxonomy and the verb ladder for attributing claims are all measured on your own corpus.
 
+> **Note: building the reference set uses a lot of tokens.** For a corpus of about 60 papers, expect several hundred million tokens and most of a day of agent time. See [Token use](#token-use) before you start.
+
 ## Why we built this
 
 Most of us learn to write in a field the slow way: by reading hundreds of its papers until we know which terms people use, how a paragraph usually opens, and which verb fits when we report someone else's finding. Grammar checkers and general-purpose AI assistants cannot give you that knowledge. Their prose is fluent but generic. They use terms that no one in your field uses, they sound like AI, and they can turn what one paper reports about another study into that paper's own finding.
@@ -139,6 +141,29 @@ The build runs in five tiers. Each tier ends with an acceptance gate: a `check_d
 | **4 Exemplars** | A sentence bank tagged with 8 rhetorical moves, a verb ladder, a structure canon | about 1 pass per 10 papers | both `check_drift` scripts pass in full |
 
 The reading passes run as Claude Code subagents with the prompts in `templates/prompts/`. The taxonomy is induced from your papers rather than assumed, because a wrong taxonomy spoils everything downstream; that is why Tier 2 stops for your approval.
+
+## Token use
+
+Tiers 0 and 1 are scripts and use almost no tokens. Tiers 2 to 4 are reading passes run by Claude subagents, and they are expensive.
+
+The figures below come from the transcripts of one real build: the instance used in the examples above, with 66 papers (51 used for style). Tiers 2 to 4 took 69 subagent runs and about 10 hours. They include the passes that had to be rerun during the build, and the main session that coordinated them.
+
+| Step | Subagent runs | Tokens processed | Of which output |
+|---|---|---|---|
+| Tier 2: taxonomy induction and heading labelling | 9 | about 21 million | about 96,000 |
+| Tier 3: PASS-1 reading | 43 | about 79 million | about 700,000 |
+| Tier 3: PASS-2 induction | 11 | about 172 million | about 77,000 |
+| Tier 4: exemplar tagging | 6 | about 44 million | about 7,000 |
+| Main session over the same hours | | about 172 million | about 390,000 |
+| **Total** | **69** | **about 490 million** | **about 1.3 million** |
+
+About 96% of the tokens processed were re-read from the prompt cache; new input was about 18 million tokens. As a rough guide, budget about 7 million tokens per paper and scale with the size of your corpus.
+
+To keep the cost under control:
+
+- Run `tier_status.py` before each tier; it prints the number of agent passes the next tier needs.
+- Build Tier 3 one chapter at a time, as the tier table says, and check your usage between chapters.
+- If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
 
 ## Requirements
 
