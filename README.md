@@ -132,7 +132,7 @@ This is the second paragraph of section 2.2 (return to work) in the same review.
 
 > The strongest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) used data on patients with primarily moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005. After controlling for pre-injury employment, Disability Rating Scale scores at discharge, and demographic factors, minorities with TBI had 2.17 times the odds of being unemployed one year post-injury compared with Whites. Gary et al. (2009) used data from the same TBI Model Systems database on patients injured between 1989 and 2001. Blacks had 2.61, 2.10, and 3.15 times the odds of not being competitively employed compared with Whites at 1, 2, and 5 years post-injury, respectively, and this difference did not change significantly over time. A similar pattern is observed for spinal cord injury. Arango-Lasprilla et al. (2010) used SCI Model Systems data on patients interviewed at one-year follow-up during 1973–2006 and found that, at 10 years post-injury, Whites had 3.02 times the odds of competitive employment compared with Blacks and 1.71 times the odds compared with Hispanics. Meade et al. (2004) used U.S. national SCI data on individuals injured between 1972 and 2002 and found that the one-year post-injury employment rate was 16.4% for Whites but only 5.9% for Blacks; after controlling for education and injury characteristics, the difference remained statistically significant.
 
-**What an AI detector reported.** Both versions were pasted into GPTZero (model 4.1o, advanced scan):
+We pasted both versions into GPTZero (model 4.1o, advanced scan):
 
 | | Written directly | Revised with `-polish` |
 |---|---|---|
@@ -146,7 +146,7 @@ In the first version GPTZero marked the opening sentence ("The clearest evidence
 
 ![GPTZero on the version revised with -polish: 0% AI, 100% human](docs/images/gptzero-after.png)
 
-**What changed.** Four changes come from the cited papers; each was checked against the PDF:
+Four of the changes come from the cited papers, and each was checked against the PDF:
 
 | Written directly | Revised | The paper |
 |---|---|---|
@@ -155,9 +155,9 @@ In the first version GPTZero marked the opening sentence ("The clearest evidence
 | with no narrowing of the gap over time | this difference **did not change significantly** over time | "for blacks as compared with whites did not change significantly over time" (Gary et al. 2009, p. 6) |
 | follow-up data from the SCI Model Systems spanning 1973–2006 | data on patients **interviewed at one-year follow-up** during 1973–2006 | "who were interviewed during their scheduled 1-year post-injury, follow-up evaluation between 1973 and 2006" (Arango-Lasprilla et al. 2010, p. 3) |
 
-The third row matters because the odds ratios themselves move from 2.61 to 2.10 between years 1 and 2; what the paper tested was whether the change was significant. The other edits are style. The Arango-Lasprilla et al. (2008) and Gary et al. (2009) sentences were each split into a design sentence and a result sentence. The verbs moved to the past tense. "Clearest" (in 0 of the 51 style papers) became "strongest" (in 7), and "minorities with TBI" links back to the sentence before it. All 43 numbers and 9 citation keys of the section are unchanged.
+In the third row, "no narrowing" was wrong: the odds ratio falls from 2.61 to 2.10 between years 1 and 2, and what the paper tested was whether the change over time was significant. The other edits are style. The Arango-Lasprilla et al. (2008) and Gary et al. (2009) sentences were each split into a design sentence and a result sentence. The verbs moved to the past tense. "Clearest" (in 0 of the 51 style papers) became "strongest" (in 7), and "minorities with TBI" links back to the sentence before it. All 43 numbers and 9 citation keys of the section are unchanged.
 
-**How to read the detector result.** This is one paragraph scanned once by one detector. Detector scores change between tools and versions, and they do not show who wrote a text. The workflow is built to make a section read like your field's papers and say what its sources say; it has no step aimed at detectors.
+This is one paragraph scanned once by one detector. Detector scores change between tools and versions, and they do not show who wrote a text. The workflow is built to make a section read like your field's papers and say what its sources say; it has no step aimed at detectors.
 
 ## What it can miss
 
@@ -167,7 +167,7 @@ The same review also turned up these problems:
 - **A first pass can be too lenient.** In the first round, all 13 section reviews passed, yet the text still used "the authors argue" 12 times (0 of the 51 papers use it), and its median sentence was 44 words long against 25 in the corpus. The review was then redone section by section under stricter rules: a full-text scan, long sentences split, and every term and framing phrase checked again.
 - **"Paper-specific, keep" needs a human check.** `-lit` kept "acute low back sprains" as Graves et al.'s own term. The paper actually says "back sprain/strain", and the final text follows the paper.
 - **Some changes remove meaning.** `-lit` once changed "fairly consistent" to "consistent" and deleted "the resulting"; both words carried meaning, and both changes were reverted.
-- **A phrase the corpus uses can still be wrong in your sentence.** In the section of Example 4, `-polish` kept "After controlling for injury severity and other factors, women were more likely than men…", because 9 papers in the corpus use "after controlling for". In this sentence it is a dangling modifier: the women did not do the controlling. The corpus check confirms the wording, not the grammar.
+- **A phrase the corpus uses can still be wrong in your sentence.** In the section of Example 4, `-polish` kept "After controlling for injury severity and other factors, women were more likely than men…", because 9 papers in the corpus use "after controlling for". In this sentence it is a dangling modifier: the women did not do the controlling.
 
 Check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
 
@@ -195,11 +195,11 @@ The reading passes run as Claude Code subagents with the prompts in `templates/p
 
 ### One-step onboarding
 
-When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Every default decision is printed as a table that you can change and re-run.
+When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Each script prints its default decisions as a table; you can change any of them and run the script again.
 
 | Step | Script | What it does |
 |---|---|---|
-| 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Stamps the field (asking you for a name and keywords) or reuses it, and ingests the matched PDFs |
+| 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Creates the field's skills (it asks you for a name and keywords) or reuses them, and ingests the matched PDFs |
 | 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, reports and books are used for terminology only, short research entries are excluded |
 | 3 | `calibrate_paragraphs.py` | Chooses the paragraph-length threshold for the corpus by a sweep from 80 to 400 characters |
 | 4 | `tier1_fill.py` | Builds the style layer and fills every Tier 1 number and verdict, so `check_drift` passes with no hand editing |
@@ -307,7 +307,7 @@ py -3 scripts/tier1_fill.py ecology
 py -3 scripts/onboard.py --finish --field ecology
 ```
 
-Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. A field stamped with version 1.1.0 gets the third skill with `py -3 scripts/stamp.py ecology --add polish`.
+Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. To add the third skill to a field stamped with version 1.1.0, run `py -3 scripts/stamp.py ecology --add polish`.
 
 **You download the papers yourself.** The skill does not fetch, scrape or call any API. Keep your PDFs and corpus text out of any public repository.
 
@@ -338,7 +338,7 @@ The self-test runs 106 checks in three parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
-3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script runs on the manuscript, including on a word broken across a PDF line and on a single-file manuscript.
+3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
 

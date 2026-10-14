@@ -49,10 +49,10 @@
 
 **`<field>-polish`：逐节改稿，改完对回原文**
 
-- 对照语料扫描全文：哪些词和多词说法没有一篇论文用过，哪些句子比语料第 90 百分位还长。
-- 到被引论文自己的 PDF 里查少见的词和每个领域术语。论文自己用的术语保留；我们自己的说法换成语料里用的说法。
+- 对照语料扫描全文：哪些词和多词说法没有一篇论文用过，哪些句子比语料句长的第 90 百分位还长。
+- 到被引论文自己的 PDF 里查少见的词和每个领域术语。论文自己用的术语保留；你自己的说法换成语料里用的说法。
 - 逐句读意思（范围不清、比较缺一方、动词比原文强），并把每一句改过的论断对回原文。
-- 确认数字、引用 key 和出处注释都没有变，编译你的稿件，按 PDF 里显示的样子渲染这一节的引用。
+- 确认数字、引用 key 和出处注释都没有变，编译你的稿件，再把这一节渲染成文本，引用按 PDF 里显示的样子写出。
 - 先存快照，只用“恰好出现一次”的精确替换改你的文件，并保留备份。
 
 ## 真实例子：一份文献综述
@@ -132,7 +132,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 > The strongest evidence on racial/ethnic disparities comes from the U.S. Traumatic Brain Injury (TBI) and Spinal Cord Injury (SCI) Model Systems databases. Arango-Lasprilla et al. (2008) used data on patients with primarily moderate-to-severe TBI from 16 TBI Model Systems centers during 1989–2005. After controlling for pre-injury employment, Disability Rating Scale scores at discharge, and demographic factors, minorities with TBI had 2.17 times the odds of being unemployed one year post-injury compared with Whites. Gary et al. (2009) used data from the same TBI Model Systems database on patients injured between 1989 and 2001. Blacks had 2.61, 2.10, and 3.15 times the odds of not being competitively employed compared with Whites at 1, 2, and 5 years post-injury, respectively, and this difference did not change significantly over time. A similar pattern is observed for spinal cord injury. Arango-Lasprilla et al. (2010) used SCI Model Systems data on patients interviewed at one-year follow-up during 1973–2006 and found that, at 10 years post-injury, Whites had 3.02 times the odds of competitive employment compared with Blacks and 1.71 times the odds compared with Hispanics. Meade et al. (2004) used U.S. national SCI data on individuals injured between 1972 and 2002 and found that the one-year post-injury employment rate was 16.4% for Whites but only 5.9% for Blacks; after controlling for education and injury characteristics, the difference remained statistically significant.
 
-**AI 检测器的结果。** 两版分别贴进 GPTZero（Model 4.1o，Advanced Scan）：
+我们把两版分别贴进 GPTZero（Model 4.1o，Advanced Scan）：
 
 | | 直接生成 | 用 `-polish` 改写后 |
 |---|---|---|
@@ -146,7 +146,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 ![GPTZero 对 -polish 改写版的结果：AI 0%，Human 100%](docs/images/gptzero-after.png)
 
-**改了什么。** 有 4 处改动来自被引论文，每处都对照 PDF 核对过：
+有 4 处改动来自被引论文，每处都对照 PDF 核对过：
 
 | 直接生成 | 改写后 | 论文原文 |
 |---|---|---|
@@ -155,9 +155,9 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 | with no narrowing of the gap over time | this difference **did not change significantly** over time | "for blacks as compared with whites did not change significantly over time"（Gary et al. 2009，第 6 页） |
 | follow-up data from the SCI Model Systems spanning 1973–2006 | data on patients **interviewed at one-year follow-up** during 1973–2006 | "who were interviewed during their scheduled 1-year post-injury, follow-up evaluation between 1973 and 2006"（Arango-Lasprilla et al. 2010，第 3 页） |
 
-第三行要紧，是因为比值本身从第 1 年的 2.61 降到了第 2 年的 2.10，“差距没有缩小”并不成立；论文检验的是这个变化是否显著。其余改动属于文风：Arango-Lasprilla et al. (2008) 和 Gary et al. (2009) 两句各拆成一句讲设计、一句讲结果；动词改成过去时；“clearest”（51 篇文风语料里 0 篇用）换成 “strongest”（7 篇用）；“minorities with TBI” 接上了前一句的话题。这一节的 43 个数字和 9 个引用 key 都没有变。
+第三行这处改动要紧：比值本身从第 1 年的 2.61 降到了第 2 年的 2.10，说“差距没有缩小”并不成立；论文检验的是这个变化是否显著。其余改动属于文风：Arango-Lasprilla et al. (2008) 和 Gary et al. (2009) 两句各拆成一句讲设计、一句讲结果；动词改成过去时；“clearest”（51 篇文风语料里 0 篇用）换成 “strongest”（7 篇用）；“minorities with TBI” 接上了前一句的话题。这一节的 43 个数字和 9 个引用 key 都没有变。
 
-**怎么看检测结果。** 这只是一段文字、一个检测器、扫一次的结果。检测分数随工具和版本变化，也不能说明文字是谁写的。工作流的目标是让一节文字读起来像本领域的论文、说的和原文一致，其中没有任何针对检测器的步骤。
+这只是一段文字、一个检测器、扫一次的结果。检测分数随工具和版本变化，也不能说明文字是谁写的。工作流的目标是让一节文字读起来像本领域的论文、说的和原文一致；它没有任何针对检测器的步骤。
 
 ## 它会漏掉什么
 
@@ -199,7 +199,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 
 | 步 | 脚本 | 做什么 |
 |---|---|---|
-| 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的、有多个候选的、重复版本的和不是英文的。盖章（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
+| 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的引用、有多个候选的引用、重复的版本和不是英文的 PDF。生成这个领域的 skill（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
 | 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，报告和书只用于查术语，篇幅很短的研究条目排除 |
 | 3 | `calibrate_paragraphs.py` | 在 80 到 400 个字符之间扫描，选出这份语料的段落长度阈值 |
 | 4 | `tier1_fill.py` | 建好文风层，并填上第 1 关要求的所有数字和判定，`check_drift` 不用手改就能通过 |
@@ -219,7 +219,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 | f | 逐句读意思（范围、比较、动词强弱） | |
 | g | 确认数字、引用 key 和出处注释没变；检查段长和句长 | 第 0 关 |
 | h2 | 把每一句改过的论断对回原文 | PDF |
-| i | 编译稿件（0 警告），重新清点引用 | TeX |
+| i | 编译稿件，要求 0 个警告；重新清点引用 | TeX |
 | j | 把这一节渲染成可读文本给你看 | 编译出的 `.bbl` |
 
 ## Token 用量
@@ -307,7 +307,7 @@ py -3 scripts/tier1_fill.py ecology
 py -3 scripts/onboard.py --finish --field ecology
 ```
 
-之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。用 1.1.0 盖出的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
+之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。用 1.1.0 生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
 
 **论文由你自己下载。** 这个 skill 不抓取、不爬网页，也不调用任何 API。请不要把 PDF 和语料文本放进公开仓库。
 
@@ -338,7 +338,7 @@ py -3 tests/run_selftest.py
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
-3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 的全部脚本，包括 PDF 里跨行断开的单词和单文件稿件。
+3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
