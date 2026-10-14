@@ -11,6 +11,9 @@ assert each defect is caught:
     B  numeric/superscript health paper: "reform.12,13 However, ..."
     C  image-only "scan" (no text layer)          -> must NOT be style-safe
     D  one-paragraph agency brief                  -> flagged SHORT
+Part 3 — one-step onboarding, then every <field>-polish script (1.2.0).
+Part 4 — Tier 4's writing canon: canon_ingest.py, check_canon_quotes.py and
+the draft check_drift canon lines (1.3.0).
 Exit 0 only if every check passes. Writes nothing outside the temp dir.
 
     py -3 tests/run_selftest.py [--keep]
@@ -808,13 +811,158 @@ def onboard_polish(tmp):
           and t.count("We find the same effects in every state.") == 1, out.strip()[-60:])
 
 
+# ---------------------------------------------------------------- part 4
+# Tier 4's writing canon done for the user (1.3.0): canon_ingest.py on a guide
+# folder plus a .bib (a PDF, a saved web page with curly quotes and a script
+# block, a text file with ligatures and a soft hyphen, a scan), then
+# check_canon_quotes.py and the draft check_drift Tier 4 canon lines on a
+# small structure-canon.md. Runs on part 3's fx3 field.
+_GUIDE_HTML = ("<html><head><title>A Guide to Writing</title>"
+               "<script>var hidden = 'never in the text';</script></head><body>\n%s\n"
+               "<p>“Write the conclusion last,” the author’s first rule says.</p>\n"
+               "</body></html>\n")
+_CANON4 = ("# structure-canon.md for fx3\n\nEvery rule quotes canon-sources/<key>.txt:line.\n\n"
+           "**S8 · Conclusion last.** `%s.txt:%d` *\"Write the conclusion last\"* · "
+           "`corpus: TO-MEASURE`\n\n")
+
+
+def canon_tier4(tmp):
+    print("\npart 4: writing canon -> canon_ingest, check_canon_quotes, check_drift Tier 4")
+    sc = os.path.join(FACTORY, "scripts")
+    root = os.path.join(tmp, "p4")
+    skills = os.path.join(tmp, "p3", "skills")
+    lit, draft = (os.path.join(skills, "fx3-" + s) for s in ("lit", "draft"))
+    guides, bibdir = os.path.join(root, "guides"), os.path.join(root, "bib")
+    for d in (guides, bibdir):
+        os.makedirs(d)
+    make_pdf(os.path.join(guides, "StyleGuide_A.pdf"), _paper(11))
+    make_pdf(os.path.join(guides, "scanned.pdf"), "", scan=True)
+    body = "\n".join("<p>%s</p>" % p for p in _paper(12).split("\n\n")[:-2])
+    with open(os.path.join(guides, "web guide.html"), "w", encoding="utf-8") as fh:
+        fh.write(_GUIDE_HTML % body)
+    with open(os.path.join(bibdir, "lig.txt"), "w", encoding="utf-8") as fh:
+        fh.write(_paper(13).replace(" finds ", " ﬁnds ").replace("specifications",
+                                                                       "speci­fications"))
+    with open(os.path.join(bibdir, "guides.bib"), "w", encoding="utf-8") as fh:
+        fh.write("@book{Writer2020,\n  author = {Writer, Wanda},\n  title = {On {Writing} Well},\n"
+                 "  year = {2020},\n  file = {lig.txt}\n}\n")
+    sk =os.path.join(draft, "references", "structure-canon.skeleton.md")
+    skt = open(sk, encoding="utf-8").read() if os.path.isfile(sk) else ""
+    check("stamped draft: skeleton (field stamped, Q3 Q5 Q6 Q7 D7 kept), prompt, quote checker",
+          "fx3" in skt and "{{" not in skt
+          and all("**%s " % r in skt for r in ("Q3", "Q5", "Q6", "Q7", "D7"))
+          and os.path.isfile(os.path.join(draft, "prompts", "structure-canon.md"))
+          and os.path.isfile(os.path.join(draft, "scripts", "check_canon_quotes.py")))
+
+    rc, out = run([os.path.join(sc, "canon_ingest.py"), "fx3", "--dest", skills,
+                   "--src", guides, "--src", os.path.join(bibdir, "guides.bib")])
+    canon = os.path.join(draft, "references", "canon-sources")
+    txt = sorted(f for f in os.listdir(canon) if f.endswith(".txt")) if os.path.isdir(canon) else []
+    man = open(os.path.join(canon, "_manifest.md"), encoding="utf-8").read() if txt else ""
+    rows = [l for l in man.splitlines() if l.startswith("| `")]
+    check("canon_ingest: 3 guides -> 3 txt + 3 manifest rows; the scan skipped and listed",
+          rc == 0 and txt == ["Writer2020.txt", "styleguide-a.txt", "web-guide.txt"] and len(rows) == 3
+          and "## Not converted" in man and "scanned.pdf" in man, "%s %s" % (rc, txt or out.strip()[-80:]))
+    cp = fresh_import("_cfgparse", os.path.join(lit, "scripts"))
+    dirs = [cp.parse(os.path.join(d, "references", "field-config.yaml")).get("canon_dir") for d in (lit, draft)]
+    check("canon_ingest: canon_dir set in BOTH field-configs",
+          dirs == [canon.replace("\\", "/")] * 2, str(dirs))
+    reg = json.load(open(os.path.join(draft, "references", "registry.json"), encoding="utf-8"))
+    cs = reg.get("canon_sources") or {}
+    sq = cs.get("spot_quotes") or {}
+    check("canon_ingest: registry count 3, spot quotes greppable verbatim",
+          cs.get("count") == 3 and len(sq) >= 2
+          and all(q in open(os.path.join(canon, f), encoding="utf-8").read() for f, q in sq.items()),
+          str(sq)[:80])
+    web = open(os.path.join(canon, "web-guide.txt"), encoding="utf-8").read() if txt else ""
+    lig = open(os.path.join(canon, "Writer2020.txt"), encoding="utf-8").read() if txt else ""
+    check("canon_ingest: web page -> straight quotes, no script text, <title> in the manifest",
+          '"Write the conclusion last," the author\'s first rule' in web and "hidden" not in web
+          and "A Guide to Writing" in man)
+    check("canon_ingest: .bib key used; ligature and soft hyphen normalised",
+          " finds " in lig and "ﬁ" not in lig and "­" not in lig and "specifications" in lig
+          and "On Writing Well" in man)
+    sg = os.path.join(canon, "styleguide-a.txt")
+    with open(sg, "a", encoding="utf-8") as fh:
+        fh.write("A line repaired by hand.\n")
+    rc, out = run([os.path.join(sc, "canon_ingest.py"), "fx3", "--dest", skills, "--src", guides])
+    check("canon_ingest re-run keeps a text edited by hand",
+          rc == 0 and "kept (edited by hand)" in out
+          and "A line repaired by hand." in open(sg, encoding="utf-8").read())
+    rc, out = run([os.path.join(sc, "tier_status.py"), "fx3", "--dest", skills])
+    check("tier_status: Tier 4 shows the guides and the drafting estimate",
+          "writing canon: 3 guides" in out and "scaled from one measured run" in out,
+          (re.findall(r"writing canon:.*", out) or [out.strip()[-60:]])[0][:70])
+
+    ln = next((i + 1 for i, l in enumerate(web.split("\n")) if "Write the conclusion last" in l), 0)
+    canon_md = os.path.join(draft, "references", "structure-canon.md")
+    ccq = os.path.join(draft, "scripts", "check_canon_quotes.py")
+    with open(canon_md, "w", encoding="utf-8") as fh:
+        fh.write(_CANON4 % ("web-guide", ln)
+                 + "**S13 · Abstract first.** `Writer2020.txt:5` *\"Always write the abstract first"
+                   " and never revise it\"*\n\n**S2 · Roadmap.** `Missing1999.txt:3` *\"a roadmap\"*\n")
+    rc, out = run([ccq])
+    check("check_canon_quotes: a misquote and a missing file -> exit 1, both named",
+          rc == 1 and re.search(r"NOT-FOUND .*Always write the abstract", out) and "NO-FILE" in out
+          and re.search(r"^OK .*Write the conclusion last", out, re.M), out.strip()[-70:])
+    with open(canon_md, "w", encoding="utf-8") as fh:
+        fh.write(_CANON4 % ("web-guide", ln) + "**S8 again.** `web-guide.txt:1` *\"the author's first"
+                 " rule says\"*\n")
+    rc, out = run([ccq])
+    check("check_canon_quotes: a wrong line -> FOUND-ELSEWHERE with the real one, exit 1",
+          rc == 1 and "FOUND-ELSEWHERE" in out and "actually web-guide.txt:%d" % ln in out,
+          out.strip()[-70:])
+    # pieces in order; hyphens ignored; a quote with nothing checkable fails;
+    # a line indented into the right column belongs to the right column
+    col = os.path.join(root, "twocol")
+    os.makedirs(col)
+    with open(os.path.join(col, "twocol.txt"), "w", encoding="utf-8") as fh:
+        fh.write("Start with the main result and                 referees read the first page\n"
+                 "say it plainly; the reader should                  and then decide whether\n"
+                 "                                                    to read any further at all\n"
+                 "know it by the end of the first para-              about the paper.\n"
+                 "graph of the introduction.\n")
+    probe = os.path.join(root, "probe.md")
+
+    def ccq_dir(body):
+        with open(probe, "w", encoding="utf-8") as fh:
+            fh.write(body)
+        return run([ccq, "--canon", probe, "--dir", col])
+    rc1, o1 = ccq_dir('`twocol.txt:1-2` *"say it plainly … Start with the main result"*\n')
+    rc2, o2 = ccq_dir('`twocol.txt:1` *"up … it"*\n')
+    rc3, o3 = ccq_dir('`twocol.txt:1-5` *"Start with the main result … the end of the first paragraph"*\n\n'
+                      '`twocol.txt:4` *"end of the first para-graph"*\n\n'
+                      '`twocol.txt:2-4` *"decide whether to read any further at all about the paper"*\n')
+    check("check_canon_quotes: reordered pieces fail, too-short fails, hyphens and right column OK",
+          rc1 == 1 and "NOT-FOUND" in o1 and rc2 == 1 and "TOO-SHORT" in o2 and rc3 == 0 and "OK 3" in o3,
+          "%s %s %s" % (rc1, rc2, o3.strip()[-50:]))
+    with open(canon_md, "w", encoding="utf-8") as fh:
+        fh.write(_CANON4 % ("web-guide", ln) + "**S8 again.** `web-guide.txt:%d` *\"the author's first"
+                 " rule says\"*\n" % ln)
+    rc, out = run([ccq])
+    check("check_canon_quotes: every quote at its pointer -> exit 0", rc == 0 and "OK 2" in out,
+          out.strip()[-50:])
+    d = dict(reg)
+    d["built_tiers"] = sorted(set(d.get("built_tiers", [])) | {4})
+    d["canon_sources"] = json.load(open(os.path.join(draft, "references", "registry.json"),
+                                        encoding="utf-8")).get("canon_sources")
+    json.dump(d, open(os.path.join(draft, "references", "registry.json"), "w", encoding="utf-8"), indent=1)
+    rc, out = run([os.path.join(draft, "scripts", "check_drift.py")])
+    want = ("structure-canon.md exists", "canon-sources: 3 txt + manifest", "canon spot-quotes greppable",
+            "canon file points at the shared source", "canon carries TO-MEASURE",
+            "canon quotes verbatim at their pointers")
+    got = [w for w in want if re.search(r"PASS %s" % re.escape(w), out)]
+    check("draft check_drift Tier 4: all six writing-canon lines PASS", len(got) == 6,
+          "missing: %s" % [w for w in want if w not in got])
+
+
 def main():
     keep = "--keep" in sys.argv
     tmp = tempfile.mkdtemp(prefix="cb-selftest-")
     try:
         # a crash is a FAIL, never an abort -- run against an OLD factory the
         # suite must still report every check it can (qualification run)
-        for part in (unit_tests, integration, onboard_polish):
+        for part in (unit_tests, integration, onboard_polish, canon_tier4):
             try:
                 part(tmp)
             except Exception as e:  # noqa: BLE001

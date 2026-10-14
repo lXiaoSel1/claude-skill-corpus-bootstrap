@@ -49,7 +49,8 @@ print("%s-draft drift check (built tiers: %s)\n"
 # ---- always-on skeleton ----------------------------------------------------
 print("skeleton")
 for s in ("draftcheck.py", "state.py", "build_evidence_map.py",
-          "measure_structure.py", "measure_verbs.py", "_fieldstyle.py"):
+          "measure_structure.py", "measure_verbs.py", "_fieldstyle.py",
+          "check_canon_quotes.py"):
     check("scripts/%s exists" % s, os.path.exists(os.path.join(HERE, s)))
 for p in ("_jobs.py", "_cfgparse.py", "a1_headings.py", "a2_build.py",
           "build_map.py", "build_names.py", "build_windows.py",
@@ -274,6 +275,14 @@ if 4 in TIERS:
         check("canon carries TO-MEASURE tags for unmeasured rules",
               "TO-MEASURE" in t,
               "every rule claims a measurement -- inherited verdicts?")
+        if os.path.isdir(canon):
+            sys.path.insert(0, HERE)
+            import check_canon_quotes as ccq
+            res = ccq.verify(t, canon)
+            bad = ccq.failing(res)
+            check("canon quotes verbatim at their pointers", not bad,
+                  "%d of %d failing (py -3 scripts/check_canon_quotes.py)"
+                  % (len(bad), len(res["quotes"])) if bad else "%d quotes" % len(res["quotes"]))
 
 # ---- Tier 4: verb ladder ---------------------------------------------------
 # FACTORY GAP CLOSED 2026-08-29: the parent asserts its verb-ladder counts and

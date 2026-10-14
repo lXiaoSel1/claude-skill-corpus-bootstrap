@@ -189,7 +189,7 @@ The build runs in five tiers. Each tier ends with an acceptance gate: a `check_d
 | **1 Style layer** | Register measurements, cohesion norms, a transitions bank. **`<field>-lit` is usable from here** | scripts only | lit `check_drift` tier 1 passes; you read one live review |
 | **2 Chapter map** | Headings from every paper, a chapter taxonomy induced from your papers (**you approve it**), a labelled chapter map, chapter slices | 1 induction pass + about 4–8 labelling passes | ≥ 90 % agreement with a hand-checked sample; you read the taxonomy and three slices |
 | **3 Records + Versions** | Paragraph-by-paragraph reading records; per chapter, paragraph patterns attested in ≥ 2 papers. **`<field>-draft` is usable from here** | about 27 × (papers / 60) reading passes + 1 per chapter, run chapter by chapter | draft `check_drift` tier 3 passes; you read one chapter; the first paragraph is drafted |
-| **4 Exemplars** | A sentence bank tagged with 8 rhetorical moves, a verb ladder, a structure canon | about 1 pass per 10 papers | both `check_drift` scripts pass in full |
+| **4 Exemplars** | A sentence bank tagged with 8 rhetorical moves, a verb ladder, a structure canon drafted from your field's writing guides | about 1 pass per 10 papers, plus 1 pass for the structure canon | both `check_drift` scripts pass in full |
 
 The reading passes run as Claude Code subagents with the prompts in `templates/prompts/`. The taxonomy is induced from your papers rather than assumed, because a wrong taxonomy spoils everything downstream; that is why Tier 2 stops for your approval.
 
@@ -246,6 +246,8 @@ To keep the cost under control:
 - If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
 
 **`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. One-step onboarding itself runs Tiers 0 and 1 as scripts.
+
+**Drafting the structure canon** (Tier 4) was measured on its own. One agent drafted it from the original build's 17 guides (about 152,000 words) with 101 tool calls in 14 minutes. It processed about 10 million tokens, 97% of them re-read from the prompt cache (about 0.28 million tokens of new input and output). `tier_status.py` scales this figure to the length of your guides.
 
 ## Requirements
 
@@ -322,11 +324,28 @@ Tier 4 builds a structure canon (`structure-canon.md`): rules on how sections an
 
 The original build used 17 guides written mostly for empirical economics and finance, among them McCloskey, Cochrane, Thomson, and Gopen & Swan. `references/canon-sources/_manifest.md` lists them with their sources, as a reference for the kind of text to look for. Their texts are copyrighted and are **not included**. A few of them are general enough to reuse in other fields.
 
-Once you have the guides:
+Once you have the guides, you can let the skill set them up or do it by hand.
+
+**Let the skill do it (recommended).** Put the guides in one folder as PDFs, saved web pages (`.html`) or text files (`.txt`, `.md`), or list them in a `.bib` whose entries have `file` fields. Then:
+
+```bash
+# Steps 1-2: convert the guides, write the manifest, set canon_dir, fill the registry
+py -3 scripts/canon_ingest.py ecology --src /path/to/guides
+
+# Step 3: ask Claude Code to draft the structure canon. It asks you first; one agent
+# then follows templates/prompts/structure-canon.md. The quotes are checked with:
+py -3 ../ecology-draft/scripts/check_canon_quotes.py
+```
+
+`canon_ingest.py` converts each guide to `<key>.txt` in the `-draft` skill's `references/canon-sources/`. The key is the `.bib` key, or a name made from the file name. The script turns ligatures and curly quotes into plain characters and keeps every line break, because the canon cites guides by line number. It skips image-only scans and writes `_manifest.md`. It also sets `canon_dir` in both `field-config.yaml` files and fills `canon_sources` in the registry (the file count and up to four verbatim spot quotes). If you correct a text by hand, running the script again leaves it alone.
+
+The agent starts from `structure-canon.skeleton.md`, the original build's rule frame with every quotation removed. For each rule it searches your guides and quotes the passage it finds with its line number, or marks the rule as having no source among your guides. `check_canon_quotes.py` then looks for every quote at its line. A quote that is not in the guide fails, and so do a quote whose pieces are in a different order and a pointer to the wrong line. The agent fixes them until the check passes. In the measured run on the 17 guides above, all 108 quotes were at their lines on the first check, 32 of the 33 rules found a source, and the agent added three rules that the guides state.
+
+**Or do it by hand.**
 
 1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. The default folder is `references/canon-sources/`. To keep a separate set for each field, set `canon_dir` to another folder in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
 2. At Tier 4, record the number of guide files (`count`) and three or four verbatim spot quotes (`spot_quotes`) under `canon_sources` in the `-draft` skill's `references/registry.json`. `check_drift` searches for each quote in the files.
-3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. No template is provided for it (see Known limitations).
+3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. You can start from the skeleton in `templates/draft/references/`, and `check_canon_quotes.py` checks the quotes.
 
 ## Self-test
 
@@ -334,17 +353,18 @@ Once you have the guides:
 py -3 tests/run_selftest.py
 ```
 
-The self-test runs 106 checks in three parts:
+The self-test runs 119 checks in four parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
 3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
+4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
 
 ## Known limitations
 
-- **Tier 4 needs material you provide.** Tiers 0–3 run without anything else. Tier 4 also needs writing guides for your field (see [Writing guides for Tier 4](#writing-guides-for-tier-4)) and a `structure-canon.md` distilled from them, which has no template in this repository.
+- **Tier 4 needs writing guides you find.** Tiers 0–3 run without anything else. Tier 4 also needs writing guides for your field (see [Writing guides for Tier 4](#writing-guides-for-tier-4)). The skill converts them and drafts `structure-canon.md` from a skeleton, but it does not find them for you. The skeleton's rules come from the original build's economics guides, and the drafting pass has been measured only on those guides; in another field, more rules may end up with no source.
 - **English corpora only.** The sentence splitter, word lists and corpus measurements assume English.
 - **Windows first.** Documentation and printed hints assume `py -3`. The scripts themselves are cross-platform.
 - **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml`, because two scripts resolve relative paths differently.
@@ -362,12 +382,13 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
 ```
 SKILL.md                    the skill Claude Code loads
 scripts/                    stamp, ingest, capture, tier_status; onboard, tier0_accept,
-                            calibrate_paragraphs, tier1_fill (one-step onboarding)
+                            calibrate_paragraphs, tier1_fill (one-step onboarding);
+                            canon_ingest (Tier 4 writing guides)
 templates/lit/              skeleton of <field>-lit
-templates/draft/            skeleton of <field>-draft
+templates/draft/            skeleton of <field>-draft, with the structure-canon skeleton
 templates/polish/           skeleton of <field>-polish: steps a-j, scripts, an optional settings example
 templates/field-config.yaml the single per-field config both skills read
-templates/prompts/          prompts for the reading passes, with format examples
+templates/prompts/          prompts for the reading passes and the structure-canon draft, with format examples
 references/                 build provenance, an archived (unimplemented) fetch survey, the writing-guide manifest
 tests/run_selftest.py       the self-test
 docs/images/                screenshots used in this README
@@ -375,6 +396,6 @@ docs/images/                screenshots used in this README
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Version 1.2.0 (2026-10-14).
+MIT. See [LICENSE](LICENSE). Version 1.3.0 (2026-10-14).
 
 Written by Xuan Tang, in a project built on Pedro Sant'Anna's [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) template for academic work with Claude Code.

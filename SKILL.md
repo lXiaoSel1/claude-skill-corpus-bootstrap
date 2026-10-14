@@ -2,7 +2,7 @@
 name: corpus-bootstrap
 description: Bootstrap a new research field's writing infrastructure from the user's own downloaded papers. Stamps three skill instances — <field>-lit (style/terminology reviewer against the field's corpus), <field>-draft (paragraph drafting with evidence ledgers) and <field>-polish (section-by-section revision of the user's manuscript against the literature and the cited PDFs) — then builds their reference layers in five acceptance-gated tiers (corpus → style measurements → chapter taxonomy+map → records+Versions → exemplars). One-step onboarding takes a manuscript and a library (PDF folder, Zotero/JabRef .bib, or PDFs plus reading notes), matches every citation to its PDF, and builds Tiers 0-1 with no configuration file. Use when user says "我要研究一个新领域", "把文献建成语料库", "用我的文献库改这篇论文", "bootstrap a corpus for X", "onboard my manuscript and library", "给这个领域盖一套 lit/draft skill", "新领域的文献库". Manual-first: the USER downloads the PDFs (no fetching, no APIs); this skill converts, measures, and orchestrates the model reading passes.
 author: Xuan Tang
-version: 1.2.0
+version: 1.3.0
 argument-hint: "[polish <main.tex> <library> | stamp <field> | ingest | tier <n> | status <field>]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Task"]
@@ -86,7 +86,7 @@ in `<lit>`/`<draft>` are the stamped instances.
 | **1 style layer** | calibrate `para_min_chars` in field-config → `py -3 scripts/capture.py <lit> measure_register.py register-measurements.md` · `py -3 scripts/capture.py <lit> build_cohesion_norms.py cohesion-measurements.md` · `py -3 <lit>/scripts/build_transitions.py`; fill registry numbers (each builder prints them); replace every `corpus: TO-MEASURE` in cohesion-canon.md and the parent counts in register.md | register measurements · cohesion norms (coarse) · transitions bank | scripts, zero agents | lit check_drift tier-1 green; **live-scan one paragraph of the new field's prose with `/<field>-lit`** — TERMS and REGISTER slots print; user reads the scan |
 | **2 chapter map** | `py -3 <draft>/pipeline/make_sample.py` → `a1_headings.py` → hand-build `groundtruth.json` (~10 papers) → `recall.py` gate → `build_windows.py` → taxonomy induction (prompts/taxonomy-induction.md, reads a1_windows.md) → **USER APPROVES; jobs, positional_jobs, start/end markers land in BOTH field-config copies** → `a2_build.py` → A2 waves (prompts/a2-wave.md) → hand `a3_groundtruth.json` → `build_map.py` (adjudications into its ADJUDICATED dict) → `stage_b_slice.py --dry-run`, then real → `build_names.py` | approved taxonomy · chapter-map · chapter-names · slices + manifest + fingerprint | 1 induction pass + ~4-8 wave/correction passes + A3 gate reads | A3 agreement ≥90% recorded in registry; user reads the taxonomy table and 3 slices; draft check_drift tier-2 green (incl. no tier-2 PARENT-BLOCK left in SKILL.md) |
 | **3 records + Versions** | PASS1 shards (prompts/pass1-reading-SPEC.md, ~8-16 papers/agent/chapter) → `verify_shards.py` → PASS2 per chapter (prompts/pass2-induction-SPEC.md) → `para_numbers.py <chapter>` audit, then `--write` → `recount.py` (uniformity calibration → registry+SKILL.md) → `measure_structure.py` + typing appendices → rewrite the tier-3 PARENT-BLOCKs of SKILL.md | records/ · sections/ (skeletons+parts, four-field Versions ≥2-attested) · uniformity gate numbers | ~27×(n/60) PASS1 + 1 PASS2/chapter — **run chapter by chapter, accept each** | draft check_drift tier-3 green (Version counts, four fields, ≥2 attestation — mechanical); user reads one full chapter; `/<field>-draft` drafts its first paragraph |
-| **4 exemplars** | tagging shards (prompts/exemplar-tagging.md, ~10 papers/agent) → `py -3 <lit>/scripts/build_exemplars.py` → registry counts + move_tags → `py -3 <draft>/scripts/measure_verbs.py` → verb-ladder.md + registry `verb_ladder_counts` → structure-canon.md with registry `canon_sources` → rewrite the tier-4 PARENT-BLOCK | exemplars bank (8 move labels) · verb-ladder · structure canon | ~1 pass per 10 papers | both instances' check_drift FULL green = the parent-parity end state |
+| **4 exemplars** | tagging shards (prompts/exemplar-tagging.md, ~10 papers/agent) → `py -3 <lit>/scripts/build_exemplars.py` → registry counts + move_tags → `py -3 <draft>/scripts/measure_verbs.py` → verb-ladder.md + registry `verb_ladder_counts` → **writing canon**: the user collects the field's writing guides; `py -3 scripts/canon_ingest.py <field> --src <folder or .bib>` converts them into `canon-sources/`, writes `_manifest.md`, sets `canon_dir` in both configs and fills registry `canon_sources` (or do these by hand, as the README describes) → ASK (print the estimate), then one agent drafts structure-canon.md with `prompts/structure-canon.md` from `references/structure-canon.skeleton.md` → `py -3 <draft>/scripts/check_canon_quotes.py` exits 0 → rewrite the tier-4 PARENT-BLOCK | exemplars bank (8 move labels) · verb-ladder · structure canon | ~1 pass per 10 papers | both instances' check_drift FULL green = the parent-parity end state |
 
 **Resume**: `py -3 scripts/tier_status.py <field> [--dest <skills-dir>]`
 reports built tiers and the next tier's cost scaled by the style-safe sample.
@@ -141,6 +141,21 @@ an instance without a manuscript is normal, not broken.
 
 ## Changelog
 
+- **2026-10-14 (1.3.0)** — Tier 4's writing canon done for the user (pre-change
+  snapshot `.snapshots/corpus-bootstrap-20261014-121346`). `canon_ingest.py`
+  turns the guides the user collected (PDF, saved web pages, text, or a `.bib`
+  with file fields) into `canon-sources/`, writes `_manifest.md`, sets
+  `canon_dir` in both configs and fills registry `canon_sources`;
+  `structure-canon.skeleton.md` (the parent's rule frame, no quotations) and
+  `prompts/structure-canon.md` let one agent draft the field's canon;
+  `check_canon_quotes.py` checks every quotation at its line pointer (pieces in
+  order, two-column text, hyphens, trailing punctuation and quote marks handled;
+  any quote not OK fails) and is a Tier 4 check_drift line. Doing the steps by
+  hand still works. Measured drafting run (17 economics guides, 151,547 words):
+  one agent, 101 tool calls, 14 min, 10.1 million tokens processed (97% cache
+  reads); 108 quotes, all at their pointers on the first check; 32 of 33 rules
+  grounded, S15-S17 added. The run's ten prompt questions and five checker gaps
+  were fixed afterwards.
 - **2026-10-14 (1.2.0)** — one-step onboarding and a third instance,
   `<field>-polish`. `onboard.py` matches a
   manuscript's citations to the user's library (bib file field, notes, file

@@ -189,7 +189,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 | **1 文风层** | 文风测量、衔接常模、过渡语库。**从这一关起 `<field>-lit` 可以用了** | 只跑脚本 | lit 的 `check_drift` 第 1 关通过；你读一次实际审查结果 |
 | **2 章节图** | 每篇论文的标题；从你的论文里归纳出的章节分类（**需要你批准**）；标注好的章节图；按章切片 | 1 轮归纳 + 约 4–8 轮标注 | 与人工核对的样本一致率 ≥ 90%；你读分类表和 3 个切片 |
 | **3 阅读记录与 Version** | 逐段阅读记录；每章至少有 2 篇论文佐证的段落结构。**从这一关起 `<field>-draft` 可以用了** | 约 27 ×（论文数 / 60）轮阅读，加每章 1 轮，逐章进行 | draft 的 `check_drift` 第 3 关通过；你读一整章；起草出第一段 |
-| **4 例句库** | 按 8 种修辞动作标注的例句库、动词阶梯、结构准则 | 每 10 篇约 1 轮 | 两个 `check_drift` 全部通过 |
+| **4 例句库** | 按 8 种修辞动作标注的例句库、动词阶梯、从本领域写作指南起草的结构准则 | 每 10 篇约 1 轮，结构准则另需 1 轮 | 两个 `check_drift` 全部通过 |
 
 这几轮阅读由 Claude Code 的子代理执行，提示词在 `templates/prompts/` 里。章节分类从你的论文里归纳，不预设。分类一旦错了，后面全部白做，所以第 2 关会停下来等你批准。
 
@@ -246,6 +246,8 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - 如果只需要审稿功能，做完第 1 关就可以停：`<field>-lit` 从那时起就能用。
 
 **`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。一键接入本身的第 0、1 关只跑脚本。
+
+**起草结构准则**（第 4 关）单独测过一次。一个子代理用最初那次搭建的 17 篇指南（约 15.2 万词）起草，调用了 101 次工具，用时 14 分钟，处理约 1,000 万 token，其中 97% 是从提示缓存里重复读取的（新输入加输出约 28 万）。`tier_status.py` 会按你的指南长度换算这个数。
 
 ## 依赖
 
@@ -322,11 +324,28 @@ py -3 scripts/onboard.py --finish --field ecology
 
 最初那次搭建用了 17 篇指南，大多是写给实证经济学和金融的，包括 McCloskey、Cochrane、Thomson、Gopen & Swan 等。`references/canon-sources/_manifest.md` 列出了这些指南和出处，可以参考要找的是哪一类文本。这些文本有版权，**仓库里没有附带**。其中有几篇比较通用，其他领域也能沿用。
 
-找好之后：
+找好之后，可以交给 skill 来整理，也可以手动做。
+
+**交给 skill（推荐）。** 把指南放进同一个文件夹，PDF、存下来的网页（`.html`）、文本（`.txt`、`.md`）都可以；也可以用一个 `.bib` 列出它们，条目里要有 `file` 字段。然后：
+
+```bash
+# 第 1-2 步：转换指南、写清单、设置 canon_dir、填 registry
+py -3 scripts/canon_ingest.py ecology --src /path/to/guides
+
+# 第 3 步：请 Claude Code 起草结构准则。它会先问你，再由一个子代理按
+# templates/prompts/structure-canon.md 起草。引文用下面的命令核对：
+py -3 ../ecology-draft/scripts/check_canon_quotes.py
+```
+
+`canon_ingest.py` 把每篇指南转成 `<key>.txt`，放在 `-draft` skill 的 `references/canon-sources/` 里。key 用 `.bib` 里的 key，没有的话按文件名生成。脚本把连字和弯引号换成普通字符，并保留所有换行，因为结构准则按行号引用指南。纯图片的扫描件会跳过。它会写出 `_manifest.md`，把两份 `field-config.yaml` 里的 `canon_dir` 都设好，并在 registry 的 `canon_sources` 里填上文件数和最多四句逐字摘录。你手动改过的文本，再跑一次脚本也不会被覆盖。
+
+子代理从 `structure-canon.skeleton.md` 开始写。这是最初那次搭建的规则框架，所有引文都已删掉。子代理按规则逐条在你的指南里检索，找到原文就连同行号引用，找不到就标明你的指南里没有出处。然后 `check_canon_quotes.py` 到行号处查找每段引文：指南里没有的引文不通过，片段顺序与原文不同的引文、行号指错的指针也不通过。子代理逐条改到检查通过为止。用上面 17 篇指南实测时，108 段引文第一次检查就都在指明的行上，33 条规则里 32 条找到了出处，子代理还按指南补了 3 条规则。
+
+**手动做。**
 
 1. 把每篇存成 UTF-8 文本，文件名用 `<key>.txt`，放进同一个文件夹，并在这个文件夹的 `_manifest.md` 里登记。默认文件夹是 `references/canon-sources/`。想让每个领域用各自的一套，就把这个领域两份 `field-config.yaml`（`-lit` 和 `-draft` 各一份）里的 `canon_dir` 都改成另一个文件夹。
 2. 到第 4 关时，在 `-draft` skill 的 `references/registry.json` 里，`canon_sources` 下填上指南的文件数（`count`）和三四句逐字摘录（`spot_quotes`）。`check_drift` 会在文件里逐句查找这些摘录。
-3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。仓库没有提供这份文件的模板（见“已知限制”）。
+3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。可以从 `templates/draft/references/` 里的骨架开始写，引文用 `check_canon_quotes.py` 核对。
 
 ## 自检
 
@@ -334,17 +353,18 @@ py -3 scripts/onboard.py --finish --field ecology
 py -3 tests/run_selftest.py
 ```
 
-共 106 项检查，分三部分：
+共 119 项检查，分四部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
 3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
+4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
 ## 已知限制
 
-- **第 4 关需要你提供材料。** 第 0–3 关不需要额外文件就能完整运行。第 4 关还需要你所在领域的写作指南（见 [第 4 关需要的写作指南](#第-4-关需要的写作指南)），以及从这些指南提炼出的 `structure-canon.md`，本仓库没有提供它的模板。
+- **第 4 关的写作指南要你自己找。** 第 0–3 关不需要额外文件就能完整运行。第 4 关还需要你所在领域的写作指南（见 [第 4 关需要的写作指南](#第-4-关需要的写作指南)）。skill 会转换这些指南，并从骨架起草 `structure-canon.md`，但不会替你找指南。骨架里的规则来自最初那次搭建用的经济学指南，起草这一步也只在这些指南上实测过；换一个领域，没有出处的规则可能会更多。
 - **只支持英文语料。** 分句、词表和各项测量都以英文为前提。
 - **以 Windows 为主。** 文档和提示信息默认用 `py -3`，脚本本身跨平台。
 - **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径，因为有两个脚本解析相对路径的方式不同。
@@ -362,12 +382,13 @@ py -3 tests/run_selftest.py
 ```
 SKILL.md                    Claude Code 加载的 skill
 scripts/                    stamp、ingest、capture、tier_status；onboard、tier0_accept、
-                            calibrate_paragraphs、tier1_fill（一键接入）
+                            calibrate_paragraphs、tier1_fill（一键接入）；
+                            canon_ingest（第 4 关的写作指南）
 templates/lit/              <field>-lit 的骨架
-templates/draft/            <field>-draft 的骨架
+templates/draft/            <field>-draft 的骨架，含结构准则的骨架
 templates/polish/           <field>-polish 的骨架：a-j 步骤、脚本、可选设置示例
 templates/field-config.yaml 两个 skill 共用的领域配置
-templates/prompts/          各轮阅读的提示词及格式示例
+templates/prompts/          各轮阅读和起草结构准则的提示词，及格式示例
 references/                 搭建来历、一份存档的（未实现的）文献抓取调研、写作指南清单
 tests/run_selftest.py       自检
 docs/images/                README 用到的截图
@@ -375,6 +396,6 @@ docs/images/                README 用到的截图
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.2.0（2026-10-14）。
+MIT，见 [LICENSE](LICENSE)。版本 1.3.0（2026-10-14）。
 
 作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

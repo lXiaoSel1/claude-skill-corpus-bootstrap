@@ -68,6 +68,32 @@ def load_reg(path):
         return None
 
 
+def canon_status(field, dest, draft):
+    """The writing guides in the draft's canon_dir and the drafting pass's cost."""
+    sys.path.insert(0, HERE)
+    import _factory
+    import canon_ingest
+    fld = _factory.Field(field, dest)
+    try:
+        cp = fld.cfgparse()
+        d = cp.as_str(cp.parse(os.path.join(draft, "references", "field-config.yaml"))
+                      .get("canon_dir")) or ""
+    except Exception:
+        d = ""
+    txt = [f for f in os.listdir(d) if f.endswith(".txt")] if d and os.path.isdir(d) else []
+    if not txt:
+        return ("writing canon: no guides yet -- collect the field's writing guides, then"
+                " canon_ingest.py <field> --src <folder>")
+    words = 0
+    for f in txt:
+        with open(os.path.join(d, f), encoding="utf-8", errors="replace") as fh:
+            words += len(fh.read().split())
+    done = os.path.isfile(os.path.join(draft, "references", "structure-canon.md"))
+    return ("writing canon: %d guides, %s words; structure-canon.md %s; drafting it: %s"
+            % (len(txt), format(words, ","), "drafted" if done else "not drafted",
+               canon_ingest.canon_estimate(words)))
+
+
 def style_safe_count(lit):
     meta = os.path.join(lit, "references", "corpus_meta.yaml")
     try:
@@ -121,6 +147,8 @@ def main():
         if t in TOKENS_M and t not in tiers:
             print("  %s          ≈ %.0f million tokens, ≈ %.1f h"
                   % (" " * 4, TOKENS_M[t] * k, HOURS[t] * k))
+        if t == 4 and t not in tiers:
+            print("  %s          %s" % (" " * 4, canon_status(args.field, args.dest, draft)))
     left = [t for t in TOKENS_M if t not in tiers]
     if left:
         print("\ntoken estimate for Tier %s at %d style-safe papers: ≈ %.0f million"
