@@ -7,8 +7,11 @@
 > All texts ligature-normalized (fi/fl/ff) and curly-quote-normalized so
 > ASCII grep hits them.
 > NOT DISTRIBUTED: the texts are copyrighted and are not part of this repository.
-> Obtain each one from the source listed below, convert it to UTF-8 text, and save
-> it in this folder as <key>.txt -- Tier 4's check_drift reads them.
+> The table below is the set used for the original empirical economics and finance
+> build. For another field, collect writing guides for that field (see the README,
+> "Writing guides for Tier 4"), save each as UTF-8 text named <key>.txt in this
+> folder (or in the folder set as canon_dir), and list it in this table.
+> Tier 4's check_drift reads them.
 
 | key | source | words | integrity |
 |---|---|---|---|

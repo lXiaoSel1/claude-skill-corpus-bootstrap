@@ -209,9 +209,22 @@ Then ask Claude Code for the next tier, for example `/corpus-bootstrap tier 1`. 
 
 **You download the papers yourself.** The skill does not fetch, scrape or call any API. Keep your PDFs and corpus text out of any public repository.
 
-## Writing guides used in Tier 4
+## Writing guides for Tier 4
 
-Tier 4's structure canon quotes published writing guides, among them McCloskey, Cochrane, Thomson, and Gopen & Swan. Their texts are copyrighted and are **not included**. `references/canon-sources/_manifest.md` lists every source. Save the ones you can obtain as UTF-8 text in that folder, named `<key>.txt`, and Tier 4's check will find them.
+Tier 4 builds a structure canon (`structure-canon.md`): rules on how sections and paragraphs are organized, each quoting a published writing guide verbatim (`<key>.txt:line`) and each checked again against your corpus. **You need to find these guides for your own field.** Look for texts that teach how papers in your field are written, for example:
+
+- articles or book chapters on how to write a paper in your discipline;
+- genre analyses of research articles in your field, such as studies of how their introductions are structured;
+- writing guides from journals, societies or departments in your field;
+- general guides to scientific writing that your field relies on.
+
+The original build used 17 guides written mostly for empirical economics and finance, among them McCloskey, Cochrane, Thomson, and Gopen & Swan. `references/canon-sources/_manifest.md` lists them with their sources, as a reference for the kind of text to look for. Their texts are copyrighted and are **not included**. A few of them are general enough to reuse in other fields.
+
+Once you have the guides:
+
+1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. The default folder is `references/canon-sources/`. To keep a separate set for each field, set `canon_dir` to another folder in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
+2. At Tier 4, record the number of guide files (`count`) and three or four verbatim spot quotes (`spot_quotes`) under `canon_sources` in the `-draft` skill's `references/registry.json`. `check_drift` searches for each quote in the files.
+3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. No template is provided for it (see Known limitations).
 
 ## Self-test
 
@@ -228,7 +241,7 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
 
 ## Known limitations
 
-- **Tier 4 is incomplete as shipped.** Tiers 0–3 run without anything else, but Tier 4 also needs a `structure-canon.md`, which has no template in this repository, plus the writing guides you obtain yourself.
+- **Tier 4 needs material you provide.** Tiers 0–3 run without anything else. Tier 4 also needs writing guides for your field (see [Writing guides for Tier 4](#writing-guides-for-tier-4)) and a `structure-canon.md` distilled from them, which has no template in this repository.
 - **English corpora only.** The sentence splitter, word lists and corpus measurements assume English.
 - **Windows first.** Documentation and printed hints assume `py -3`. The scripts themselves are cross-platform.
 - **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml`, because two scripts resolve relative paths differently.
