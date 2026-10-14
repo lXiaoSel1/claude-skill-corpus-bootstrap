@@ -19,9 +19,9 @@ This project is meant to help everyone write better by making the papers of your
 
 ## Who it is for
 
-- **Graduate students and early-career researchers.** Learn how your field writes from the papers themselves, with counts and examples instead of rules of thumb.
-- **Authors who write in English as a second language.** The grammar may be fine while the word choice and sentence shapes still give the text away. Each suggestion shows the papers that use the wording, so you learn the idiom rather than only accepting a correction.
-- **Researchers moving into a new field.** Build the reference set from that field's papers, and its terms and paragraph conventions become explicit instead of something you absorb over years.
+- **Graduate students and early-career researchers.** Learn how your field writes from its own papers, through counts and example sentences.
+- **Authors who write in English as a second language.** The grammar may be fine while the word choice and sentence shapes still give the text away. Each suggestion shows the papers that use the wording, so you can see the idiom behind the correction.
+- **Researchers moving into a new field.** Build the reference set from that field's papers, and its terms and paragraph conventions are spelled out from the start.
 - **Anyone who writes with an AI assistant.** AI prose tends to be fluent and generic, and it may introduce terms or attributions that are not in the sources. `-lit` flags wording your field does not use, and every claim in a `-draft` paragraph has a ledger row with its source line, or a flag telling you to check it.
 
 ## What it does for you
@@ -35,7 +35,7 @@ This project is meant to help everyone write better by making the papers of your
 - Gives a reason for every change and lists open questions under "leave to author".
 - Never changes your argument, citations or numbers.
 
-**`<field>-draft`, a drafter that will not write without a source**
+**`<field>-draft`, a drafter that works from a source ledger**
 
 - Picks a paragraph structure that at least two papers in your corpus use for the same job.
 - Builds a claim ledger before writing: each claim gets a row with the attribution verb and the source line pasted from the paper, and anything it cannot source is flagged with `!!`.
@@ -76,11 +76,9 @@ CHANGED (3)
      Cabral & Dillender (the paper being described) uses "maximum weekly benefit" 9 times
 ```
 
-Two of the three replacements are the cited paper's own wording, which is what a reader who knows that paper expects to see.
-
 ### 2. A claim ledger before the prose (`-draft`)
 
-For a paragraph on Graves et al. (2012), `-draft` chose **Version 3 (study by study, single study)** and filled the ledger before writing. Three of its rows:
+For a paragraph on Graves et al. (2012), `-draft` chose Version 3 (study by study, single study) and filled the ledger before writing. Three of its rows:
 
 | cite-key | verb | claim | source | flag |
 |---|---|---|---|---|
@@ -94,9 +92,9 @@ One of the sentences it drafted:
 Male workers were 43\% more likely than female workers to receive an MRI within 42 days of injury (IRR 1.43, 95\% CI 1.12--1.82); after excluding self-report variables that could have been affected by interview timing, the authors stated that the overall pattern of associations was similar to the main model, but the male-to-female ratio dropped to 1.24 (95\% CI 0.98--1.58) and was no longer statistically significant.
 ```
 
-The `!!` row matters. `-draft` could not find a source line for the 1.24 figure, so it marked the row for checking instead of treating it as confirmed. When the author checked, the number was in Table 2 (p. 16) of the paper.
+`-draft` could not find a source line for the 1.24 figure, so it marked that row `!!` for checking instead of treating the figure as confirmed. When the author checked, the number was in Table 2 (p. 16) of the paper.
 
-### 3. Two skills, two kinds of evidence
+### 3. Phrases checked with both skills
 
 One paragraph opened with **"Regarding costs,"**. `-lit` passed it, because "Regarding" appears in 25 of the 51 papers. `-draft` keeps a record of how every paragraph in the corpus opens, and that record showed a different picture: only 2 of the corpus's 2,702 paragraph openings start with "Regarding"; the 25 papers use it mid-sentence. The paragraph was rewritten to open with its subject.
 
@@ -111,22 +109,22 @@ More rewrites from the same review, each backed by a corpus count:
 
 ## What it can miss
 
-The same review also showed where the tools fall short. These are worth knowing before you rely on them:
+The same review also turned up these problems:
 
 - **`-lit` checks wording, not facts.** Another draft of the paragraph above, written without a ledger, called the 1.24 figure an "odds ratio"; Graves et al. report an incidence rate ratio. `-lit` made no changes to that section, because the wording was fine. The error was caught only when each statement was checked against the paper.
 - **A first pass can be too lenient.** In the first round, all 13 section reviews passed, yet the text still used "the authors argue" 12 times (0 of the 51 papers use it), and its median sentence was 44 words long against 25 in the corpus. The review was then redone section by section under stricter rules: a full-text scan, long sentences split, and every term and framing phrase checked again.
 - **"Paper-specific, keep" needs a human check.** `-lit` kept "acute low back sprains" as Graves et al.'s own term. The paper actually says "back sprain/strain", and the final text follows the paper.
 - **Some changes remove meaning.** `-lit` once changed "fairly consistent" to "consistent" and deleted "the resulting"; both words carried meaning, and both changes were reverted.
 
-So check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
+Check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
 
 ## Design principles
 
-- **Your content stays yours.** The tools never change your argument, citations or numbers.
-- **The corpus is the only authority.** No rule is taken on trust; every verdict cites a count and a line from your own papers.
-- **No evidence, no sentence.** Every claim in a drafted paragraph has a source line, or a visible flag.
-- **You supply the papers.** The skill does not fetch, scrape or call any API.
-- **You stay in control.** The build stops after every tier, and the chapter taxonomy waits for your approval.
+- The tools never change your argument, citations or numbers.
+- The corpus is the only authority: every verdict cites a count and a line from your own papers.
+- Every claim in a drafted paragraph has a source line or a visible flag.
+- You supply the papers. The skill does not fetch, scrape or call any API.
+- The build stops after every tier, and the chapter taxonomy waits for your approval.
 
 ## How it works
 
