@@ -1,5 +1,9 @@
 # Introduction — Part 04: DESIGN
 
+> **Parent example (economics/finance), read-only.** A PASS2 part file from the original build,
+> shown for its FORMAT (Version blocks, attribution, the usual order, the paragraph budget). The
+> papers, numbers and "this corpus" below are the parent's, not this field's.
+>
 > PUBLIC COPY: verbatim example sentences are replaced by placeholders, paper keys by
 > PaperA... stand-ins, and the parent manuscript's `For this manuscript` section by an
 > empty skeleton. The Pattern / Use it when / Not this when fields are unchanged.

@@ -16,21 +16,25 @@ Steps a–j of {{FIELD}}-polish. Section: `<key>` (<file>:<first>–<last>). Bas
 
 Recurring 0-paper frames, one-off frames, 0–2-paper words, long sentences, as listed. Positive controls: all CAUGHT? (paste the lines)
 
+## e. Rare words and terms
+
+| key | draft wording | source (quoted, with page) | verdict: source term kept / own wording replaced |
+|---|---|---|---|
+
 ## c, d2. Frames and openers
 
-| candidate rejected | papers | used instead | papers |
+Counts are from `attest.py --scope style` (N = the style-safe papers).
+
+| candidate rejected | papers (style, N=<style_safe>) | used instead | papers (style) |
 |---|---|---|---|
+
+Rule-2 checks that could not be met (rule 2c: no attested phrase with the same sense; the sweep's FOCUS coverage line says how often to expect it), and what was done instead:
 
 Openers (opener_check): each paragraph's opener and leading connective, its corpus count, the verdict.
 
 ## d. {{FIELD}}-lit
 
-TERMS and REGISTER blocks pasted as returned. JOINS: each WEAK / BROKEN join with its verdict; the M8 pair of each paragraph adjudicated. Terms cached with cache.py.
-
-## e. Rare words and terms
-
-| key | draft wording | source (quoted, with page) | verdict: source term kept / own wording replaced |
-|---|---|---|---|
+TERMS (scope=term, N=<terminology_safe>) and REGISTER (scope=style) blocks pasted as returned. JOINS: every join as cohesion_loop.py prints it, each WEAK / BROKEN one with its verdict; the M8 pair of each paragraph adjudicated. Terms cached with cache.py, or listed here when the lit skill is read-only.
 
 ## f. Section G
 

@@ -43,9 +43,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-# FACTORY FIX 2026-10-07: was BASE/.. (the skill root in a stamped instance,
-# where pipeline/ sits beside references/), so every path below pointed at
-# nothing and `--write` found zero attributions.
+# pipeline/ sits beside references/ in a stamped instance
 REF  = os.path.normpath(os.path.join(BASE, "..", "references"))
 CHAP = next((a for a in sys.argv[1:] if not a.startswith("-")), "introduction")
 SEC  = os.path.join(REF, "sections", CHAP)

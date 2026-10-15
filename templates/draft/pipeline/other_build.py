@@ -68,5 +68,6 @@ for k in sorted(cand):
         out.append(f"PRIOR NOTE: {assign[(k, c['line'])][1]}")
         out.append(f"FOLLOWS: {body(lines, c)}")
 p = os.path.join(BASE, "other_retag.md")
-open(p, 'w', encoding='utf-8').write("\n".join(out))
+with open(p, 'w', encoding='utf-8') as _fh:
+    _fh.write("\n".join(out))
 print(f"{n} OTHER entries, {os.path.getsize(p)//1024} KB -> {p}")

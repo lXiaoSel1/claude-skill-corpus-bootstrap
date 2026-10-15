@@ -15,7 +15,12 @@
     "_why_chapters": "keys arrive from the APPROVED taxonomy at Tier 2; parts/versions/denominator per chapter arrive from PASS2 outputs at Tier 3 -- each record file's own header states its denominator",
     "min_attesting_papers": 2,
     "_why_min_attesting": "a Version quoted from one paper is that paper's habit, not a move (PASS2_SPEC rule, carried from the parent)",
-    "fields": ["Pattern", "Example", "Use it when", "Not this when"]
+    "fields": [
+      "Pattern",
+      "Example",
+      "Use it when",
+      "Not this when"
+    ]
   },
   "uniformity_gate": {
     "triples": null,
@@ -31,16 +36,20 @@
     "_why": "sample size from sample-keys.txt (pipeline/make_sample.py); A1 recall from pipeline/recall.py against groundtruth.json; A3 gate agreement recorded at Tier 2 acceptance (parent 94.4%, a mathematics instance 93.1%) -- positional jobs stay OUT of the gate (they are sliced by position, not judged from headings; the mathematics instance's first gate counted the abstract and manufactured 4 false disagreements)"
   },
   "structure_norms": {
-    "A_tagged": null,
-    "B_denominator": null,
-    "C_denominator": null,
-    "_why": "filled from scripts/measure_structure.py at Tier 3; layer A (exact move sequences) exists only if a tagged round is run -- null means no claim may rest on it"
+    "layers": [
+      "A_tagged18",
+      "B_slices",
+      "C_full60",
+      "D_attrib_lb",
+      "E_equation_density"
+    ],
+    "_why": "the layers scripts/measure_structure.py writes to references/structure-norms.json at Tier 3 (check_drift asserts each is present); layer A (exact move sequences) is null unless a tagged round is run -- null means no claim may rest on it"
   },
   "canon_sources": {
     "count": null,
     "location": "{{CANON_DIR}}",
     "spot_quotes": {},
-    "_why": "Tier 4: the published writing guides are field-invariant and live once at factory level (field-config canon_dir); each rule's CORPUS STATUS is per-instance in structure-canon.md. Fill count from the folder and 3-4 verbatim spot quotes; check_drift greps them"
+    "_why": "the writing guides at field-config's canon_dir (canon_ingest.py writes a field's own set to references/canon-sources and fills this block): count = .txt files there, spot_quotes = {file: a line copied verbatim}, at least min(3, count)"
   },
   "verb_ladder_counts": {},
   "_why_verb_ladder_counts": "Tier 4: written from scripts/measure_verbs.py output; check_drift asserts each count appears in verb-ladder.md. An empty dict at Tier 4 is a FAIL (an unasserted ladder is inherited from the parent by default)"

@@ -24,7 +24,7 @@ draft_instance: {{FIELD}}-draft
 pdftotext:
 
 # The ONE paragraph-length threshold (chars) for every measurement
-# (textseg, cohesion norms, register). Calibrate at Tier 1.
+# (textseg, cohesion norms, register). calibrate_paragraphs.py sets it at Tier 1.
 para_min_chars: 150
 
 # Corpus documents kept OUT of the research-prose style sample but still
@@ -38,6 +38,8 @@ excluded:
 
 # ---- filled at Tier 2 (taxonomy approval) ----------------------------------
 # The field's chapter jobs, from the APPROVED induction — never economics'.
+# One item per job, its one-line functional definition as the item's comment:
+#   - methods   # how the data were collected and the analysis run
 jobs:
 
 # Jobs sliced by position rather than heading, in document order. The FIRST
@@ -48,6 +50,10 @@ positional_jobs:
 # Optional: the job the structure layer treats as "the introduction"
 # (default: first job after the front block)
 intro_job:
+
+# Displayed-equation layer (measure_structure layer E, draftcheck `section`):
+# on = this field's papers display numbered equations; off = prose fields
+equation_layer: on
 
 # Regex alternatives that may OPEN a front block lacking the word "Abstract"
 # (medicine: Summary, Objective, Importance, Background, Context)
@@ -63,8 +69,8 @@ abstract_end_markers:
 # on title-case detection; declare the FIELD's words, not economics')
 headwords:
 
-# Tier 4: where the writing-canon sources live (default: the factory's
-# references/canon-sources next to this instance)
+# Tier 4: where this field's writing guides live (stamped as the -draft
+# skill's own references/canon-sources/; canon_ingest.py fills it)
 canon_dir: {{CANON_DIR}}
 
 # ---- filled at manuscript onboarding ---------------------------------------

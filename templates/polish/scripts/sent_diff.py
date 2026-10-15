@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Step h2 -- sentence-level diff of a section, snapshot vs live, block by block.
 
-A block is the text up to and including a line that ends in a comment (the
-`% Key p.N` page comment that records where a fact came from), so one block
-is one source's facts; text after the last comment is one more block. Blocks
-are matched by their comment (and its occurrence number), not by position,
-so a block inserted or dropped does not shift every later comparison. For
-each changed block, the sentences only in the snapshot print as `-`, the
-sentences only in the live text as `+`: check each against the source.
+A block is one source's facts. With page comments, a block is the text up to
+and including a line that ends in a comment (the `% Key p.N` page comment);
+text after the last comment is one more block. Without page comments, a block
+is one cited study: it starts at a sentence whose first citation names other
+keys than the block before. Blocks are matched by their comment or keys (and
+occurrence number), not by position, so a block inserted or dropped does not
+shift every later comparison. For each changed block, the sentences only in
+the snapshot print as `-`, the sentences only in the live text as `+`: check
+each against the source.
 
 RUN
     py -3 scripts/sent_diff.py <snapshot> <section> [section ...]
 Exit code 1 when blocks were added or removed (the pairing is then partial).
 """
-import re
 import sys
-from collections import OrderedDict
 
 import _rp
 
@@ -24,40 +24,10 @@ if len(ctx.args) < 2:
     _rp.die(__doc__)
 name = ctx.args[0]
 split_sentences = ctx.split_sentences()
-COMMENT = re.compile(r"(?<!\\)%\s*(.*)$")
-
-
-def blocks(lines):
-    out, buf, seen = OrderedDict(), [], {}
-    for _, line in _rp.body_lines(lines):
-        m = COMMENT.search(line)
-        body = re.sub(r"(?<!\\)%.*$", "", line).strip()
-        if body:
-            buf.append(body)
-        if m:
-            key = m.group(1).strip()
-            seen[key] = seen.get(key, 0) + 1
-            out[(key, seen[key])] = " ".join(buf)
-            buf = []
-    if buf:
-        out[("(no comment)", 1)] = " ".join(buf)
-    return out
-
-
-CITE_ANY = _rp.CITE_ANY_RE
 
 
 def sentences(text):
-    """Split raw LaTeX; a sentence that opens with \\citet{} is still a new
-    sentence (the splitter wants a capital), so citations are swapped for
-    capitalised placeholders while splitting and put back after."""
-    keep = []
-
-    def hold(m):
-        keep.append(m.group(0))
-        return "Cite%dq" % (len(keep) - 1)
-    out = split_sentences(CITE_ANY.sub(hold, text))
-    return [re.sub(r"Cite(\d+)q", lambda m: keep[int(m.group(1))], s).strip() for s in out]
+    return _rp.latex_sentences(text, split_sentences)
 
 
 def label(k):
@@ -66,14 +36,20 @@ def label(k):
 
 uneven = 0
 for sec in ctx.sections(ctx.args[1:]):
-    old, new = blocks(ctx.snapshot_lines(name, sec)), blocks(sec.lines())
-    print("##### %s: %d blocks in snapshot %s, %d now" % (sec.key, len(old), name, len(new)))
+    old_lines, new_lines = ctx.snapshot_lines(name, sec), sec.lines()
+    old, mode = _rp.section_blocks(old_lines, split_sentences)
+    new, mode2 = _rp.section_blocks(new_lines, split_sentences)
+    if mode != mode2:   # page comments added or removed: compare the same way
+        old, new = _rp.comment_blocks(old_lines), _rp.comment_blocks(new_lines)
+        mode = "comments"
+    print("##### %s: %d blocks in snapshot %s, %d now (one block per %s)"
+          % (sec.key, len(old), name, len(new),
+             "page comment" if mode == "comments" else "cited study"))
     gone = [k for k in old if k not in new]
     added = [k for k in new if k not in old]
     if gone or added:
         uneven += 1
-        print("  ! block count or comments changed: %d only in the snapshot, %d only now"
-              % (len(gone), len(added)))
+        print("  ! blocks changed: %d only in the snapshot, %d only now" % (len(gone), len(added)))
     for i, k in enumerate(new, 1):
         sn = sentences(new[k])
         so = sentences(old.get(k, ""))

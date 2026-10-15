@@ -22,7 +22,7 @@ name. A text you repaired by hand is never overwritten (--force KEY does).
 RUN
     py -3 scripts/canon_ingest.py <field> --src <folder or .bib> [--src ...] [--map keys.csv]
         [--canon-dir <dir>] [--dest <skills dir>] [--force KEY] [--dry-run]
-    keys.csv columns: key,path[,title][,url]
+    keys.csv columns: key,path[,title][,url]   (a relative path is read from the CSV's folder)
 """
 import argparse
 import csv
@@ -46,12 +46,12 @@ SCAN_WPP = ingest.SCAN_WPP
 
 
 def slug(name):
-    s = re.sub(r"[^a-z0-9]+", "-", os.path.splitext(os.path.basename(name))[0].lower()).strip("-")
+    s = F.safe_key(os.path.splitext(os.path.basename(name))[0].lower(), "-", "a-z0-9")
     return (s[:40].rstrip("-") or "guide")
 
 
 def clean_key(k):
-    k = re.sub(r"[^A-Za-z0-9_\-]+", "-", k).strip("-_")
+    k = F.safe_key(k, "-")
     return k if k and k[0].isalnum() else "g-" + k
 
 
@@ -88,13 +88,14 @@ class _Text(HTMLParser):
 
 
 def read_any(path):
-    raw = open(path, "rb").read()
-    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    for enc in ("utf-8-sig", "cp1252"):
         try:
             return raw.decode(enc)
         except UnicodeDecodeError:
             continue
-    return raw.decode("utf-8", "replace")
+    return raw.decode("latin-1")      # decodes any byte string
 
 
 def normalize(text):
@@ -131,12 +132,15 @@ def collect(a):
     import onboard
     items = []
     if a.map:
-        with open(a.map, encoding="utf-8-sig", newline="") as fh:
+        cmap = F.user_path(a.map)
+        base = os.path.dirname(cmap)      # a relative path is read from the CSV's folder
+        with open(cmap, encoding="utf-8-sig", newline="") as fh:
             for r in csv.DictReader(fh):
                 if (r.get("key") or "").strip() and (r.get("path") or "").strip():
-                    items.append({"key": clean_key(r["key"].strip()), "path": os.path.abspath(r["path"].strip()),
+                    path = os.path.normpath(os.path.join(base, os.path.expanduser(r["path"].strip())))
+                    items.append({"key": clean_key(r["key"].strip()), "path": path,
                                   "title": (r.get("title") or "").strip(), "url": (r.get("url") or "").strip()})
-    for src in a.src or []:
+    for src in [F.user_path(x) for x in a.src or []]:
         if os.path.isdir(src):
             for root, dirs, files in os.walk(src):
                 dirs[:] = [d for d in dirs if not d.startswith(".")]
@@ -245,7 +249,10 @@ def main():
         return 0
     os.makedirs(canon, exist_ok=True)
     pj = os.path.join(canon, "canon_sources.json")
-    rec = json.load(open(pj, encoding="utf-8")) if os.path.isfile(pj) else {}
+    rec = {}
+    if os.path.isfile(pj):
+        with open(pj, encoding="utf-8") as fh:
+            rec = json.load(fh)
     found = []
 
     def conv():
@@ -313,29 +320,21 @@ def main():
     return 0
 
 
-# Drafting structure-canon.md, measured once (2026-10-14): 17 guides, 151,547
-# words, 35 rules -> one agent, 101 tool calls, 14 min, 10.1 million tokens
-# processed (97% prompt-cache reads, 0.28 million new input and output). The
-# work is mostly per rule (searches and reads for each), so half the cost is
-# taken as fixed and half as growing with the guides' length -- an assumption
-# until a second run is measured.
-CANON_REF_WORDS = 151547
-CANON_REF_M = 10.1
-CANON_REF_MIN = 14
-
-
+# the drafting pass's cost: _factory.CANON_MODEL (one measured run)
 def _canon_scale(words):
-    return 0.5 + 0.5 * words / float(CANON_REF_WORDS)
+    m = F.CANON_MODEL
+    return m["fixed_share"] + (1 - m["fixed_share"]) * words / float(m["words"])
 
 
 def canon_tokens(words):
     """Millions of tokens the drafting pass processes, from the guides' total length."""
-    return CANON_REF_M * _canon_scale(words)
+    return F.CANON_MODEL["tokens_m"] * _canon_scale(words)
 
 
 def canon_estimate(words):
     return ("about %.0f million tokens processed (about 97%% prompt-cache reads), about %.0f min;"
-            " scaled from one measured run" % (canon_tokens(words), CANON_REF_MIN * _canon_scale(words)))
+            " scaled from one measured run"
+            % (canon_tokens(words), F.CANON_MODEL["minutes"] * _canon_scale(words)))
 
 
 if __name__ == "__main__":

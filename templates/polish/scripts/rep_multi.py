@@ -19,7 +19,7 @@ if len(ctx.args) != 1:
 groups = _rep.parse(_rp.read(ctx.args[0]), multi=True)
 if None in groups:
     _rp.die("pairs before the first `FILE <section>` line")
-job = _rep.Job(ctx)
+job = _rep.Job(ctx, pairs_file=ctx.args[0])
 for target, pairs in groups.items():
     job.add(target, pairs)
 sys.exit(job.commit())

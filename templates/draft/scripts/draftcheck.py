@@ -16,11 +16,9 @@ RUN  (paragraph text via a file, or - for stdin)
     py -3 scripts/draftcheck.py numbers draft.txt tables/main.tex
     py -3 scripts/draftcheck.py section intro-draft.tex <chapter>
 
-FACTORY FIXES 2026-10-07: manuscript/table paths come from field-config
-(`manuscript_tables`, relative to the project root) instead of the parent's
-a hardcoded manuscript folder; citations are read from LaTeX \\cite{} AND
-Markdown/pandoc [@key]; the attribution-verb list (LADDER) is now reported
-instead of sitting unused; `section` is skipped where field-config sets
+Manuscript and table paths come from field-config (`manuscript_tex`,
+`manuscript_tables`); citations are read from LaTeX \\cite{} and
+Markdown/pandoc [@key]; `section` is skipped where field-config sets
 `equation_layer: off` (prose fields), because its parenthesised-number proxy
 has no meaning there.
 """

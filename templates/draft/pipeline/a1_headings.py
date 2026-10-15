@@ -66,14 +66,14 @@ T = r'[A-Za-z0-9 ,:;&?!\'’\-–—\(\)/\.~<>=≤≥≠+*\^_\{\}\[\]\|\u0370-\u
 # character, so its introduction slice swallowed two thirds of the paper.
 # U+FB00-FB06 are therefore title characters.
 _SEC = r'(?:§\s*|Section\s+)?'
-# FACTORY FIX 2026-10-07 (health-policy corpus, Tier 2 recall gate): Wiley journals
+# Wiley journals
 # (AJIM, newer HSR) set the number and title apart with a bar --
 # '1 | INTRODUCTION', '2.2.3 | Independent neighborhood SE variables'.
 # P1_NUM demanded the title straight after the number, so all five chapters
 # of P63 produced no candidate at all (not even a rejection).
 _BAR = r'(?:\|\s*)?'
 P1_NUM = re.compile(r'^\s*' + _SEC + r'(\d{1,2}(?:\.\d{1,2}){0,2})\.?\s+' + _BAR + r'([A-Z~]' + T + r'{3,150})\s*$')
-# FACTORY FIX 2026-10-07: 'Part I: Group Health and Employer Insurance:
+# 'Part I: Group Health and Employer Insurance:
 # Parallel Health Care Reimbursement' (P18, NBER WP) -- 11 words, past
 # P1_BARE's word cap, so the chapter was dropped silently. Working papers and
 # reports number top-level chapters 'Part I:' / 'Chapter 2.'.
@@ -110,7 +110,7 @@ P3 = re.compile(
     r'(?:\s+(\d{1,2}\.\d{1,2})\.?\s+([A-Z][A-Za-z ,:;&\'\-\(\)/]{3,50}))?'
     r'\s*$')
 
-# BACK-PORTED 2026-10-07 from a mathematics instance (generic; found 2026-09-07): RUN-IN HEADINGS. Mid-century
+# RUN-IN HEADINGS. Mid-century
 # journals set the section title and its first sentence on ONE line --
 # "2. The particular solutions. In this section, we construct the particular
 # solutions of equations (1.9)..." (r06_MorreyCB1958, Amer. J. Math. 1958,
@@ -141,7 +141,7 @@ import _jobs
 _hw = _jobs.headwords_re()
 HEADWORDS = re.compile(_hw, re.I) if _hw else None
 
-# FACTORY FIX 2026-10-07 (IMRaD): with `headwords` empty -- the template
+# with `headwords` empty -- the template
 # default -- a single-word heading was emitted only on a headwords match, so
 # unnumbered `Methods`, `Results`, `Discussion`, `Background` vanished; and a
 # sentence-case heading ('Study population and data') failed titleish(). This
@@ -205,7 +205,7 @@ YESNO = re.compile(r'\b(yes|no)\b', re.I)
 # The discriminator that still works is that a TABLE row has bare numbers with
 # no connective prose, so numbers bound to a named object (Theorem 1.3,
 # equation (2.4), p = 2) are discounted before the count is taken.
-# BACK-PORTED 2026-10-07 from a mathematics instance (generic; found 2026-09-07): the word list was SINGULAR only,
+# the word list was SINGULAR only,
 # so 'Proofs of Theorems 1 and 2' (r46_SirakovB2007 L887, a real chapter) kept
 # both numerals free and tableish() rejected it as a table row. Maths chapters
 # routinely discharge several numbered results at once -- 'Proofs of Theorems
@@ -282,7 +282,7 @@ def numbered_ok(title):
     # than a footnote in mathematics -- '5 A compactness lemma',
     # '3 The unconstrained case'.  The stopword test keeps its bite for
     # sentence-initial pronouns and connectives, which never open a title.
-    # BACK-PORTED 2026-10-07 from a mathematics instance (generic; found 2026-09-07): STOPINIT carries 'appendix'
+    # STOPINIT carries 'appendix'
     # as a footnote-killer, but a NUMBERED line opening with it is an appendix
     # CHAPTER, not a footnote -- '7 Appendix: Computation of beta_i(lambda) for
     # N = 1' (r53_WeiJC2022 L3990) was killed outright. titleish() could not

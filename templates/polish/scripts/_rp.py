@@ -53,7 +53,7 @@ DEFAULTS = {
     "cohesion_section": "",
     "slice_chapters": [],
     "notes_dir": "",
-    "notes_pdf_field": "对应PDF",
+    "notes_pdf_field": "pdf",
     "library_index": ".polish/library-index.json",
     "snapshot_dir": ".polish/snapshots",
     "compile_engine": "auto",
@@ -160,7 +160,16 @@ class Ctx(object):
         return attest, textseg
 
     def split_sentences(self):
-        return self.lit_modules()[1].split_sentences
+        """The lit sibling's abbreviation-aware splitter (no corpus needed);
+        a plain one when the lit skill is not there."""
+        p = self.lit_scripts()
+        if p not in sys.path:
+            sys.path.insert(0, p)
+        try:
+            import textseg
+            return textseg.split_sentences
+        except ImportError:
+            return lambda t: re.split(r"(?<=[.!?])\s+(?=[A-Z\\])", t)
 
     def built_tiers(self, which="lit"):
         d = self.lit if which == "lit" else self.draft
@@ -305,7 +314,8 @@ class Ctx(object):
         note = self.note_path(key)
         if note:
             field = self.opts["notes_pdf_field"]
-            m = re.search(r"^\s*" + re.escape(field) + r"\s*:\s*(.+)$",
+            # the configured field, or the names onboarding also accepts
+            m = re.search(r"^\s*(?:%s|pdf|PDF|file|对应PDF)\s*[:：]\s*(.+)$" % re.escape(field),
                           _read(note), re.M)
             if m:
                 p = m.group(1).strip().strip("'\"")
@@ -327,6 +337,12 @@ class Ctx(object):
             return normalize(_read(corp)), "lit corpus txt (%s)" % how
         return "", how
 
+    def page_label(self, key, offset):
+        """"p.N" for an offset in source_text(key) when that text is the PDF's,
+        else "" (the lit corpus copy has no pages)."""
+        pdf, _ = self.pdf_for(key)
+        return "p.%d" % pdf_page(pdf, offset) if pdf else ""
+
 
 def _read(path):
     with open(path, encoding="utf-8", errors="replace") as fh:
@@ -346,15 +362,32 @@ def normalize(text):
     return re.sub(r"\s+", " ", text)
 
 
-def pdf_text(path):
+def _pdf(path):
     if path not in _PDF_CACHE:
         try:
             import fitz
         except ImportError:
             die("PyMuPDF is needed to read PDFs: py -3 -m pip install pymupdf")
         with fitz.open(path) as d:
-            _PDF_CACHE[path] = normalize("\n".join(p.get_text() for p in d))
+            pages = [p.get_text() for p in d]
+        _PDF_CACHE[path] = {"pages": pages, "text": normalize("\n".join(pages)), "starts": None}
     return _PDF_CACHE[path]
+
+
+def pdf_text(path):
+    return _pdf(path)["text"]
+
+
+def pdf_page(path, offset):
+    """The page (1 = the file's first page, not the journal's printed number)
+    holding `offset` of pdf_text(path). A word hyphenated across a page break
+    can put the boundary a character or two off."""
+    import bisect
+    c = _pdf(path)
+    if c["starts"] is None:
+        c["starts"] = [0] + [len(normalize("\n".join(c["pages"][:k]) + "\n"))
+                             for k in range(1, len(c["pages"]))]
+    return bisect.bisect_right(c["starts"], offset)
 
 
 def term_pattern(term):
@@ -428,11 +461,177 @@ def toks(s):
     return _TOK.findall(s)
 
 
+def prose_words(s):
+    """Words of a sentence as the length rules count them: citations
+    (CITEX) are not words -- the same count para_lengths.py uses."""
+    return len([t for t in toks(s) if t != "citex"])
+
+
+# A statistic's label before its value ("OR 0.41", "aHR = 1.2", "RRs 0.8"):
+# lower-cased it would read as the word "or". Case-sensitive on purpose.
+STAT_LABEL = re.compile(r"\b(?:a?ORs?|a?HRs?|a?RRs?|IRRs?)\b(?=\s*[=:,]?\s*[-−]?\.?\d)")
+
+
+def gram_toks(s):
+    """Tokens for frame (n-gram) counting: a statistic label is masked as a
+    citation, so no frame runs across it."""
+    return toks(STAT_LABEL.sub(" CITEX ", s))
+
+
+# ---- blocks: the units h2 and g compare ---------------------------------------
+_COMMENT_AT_END = re.compile(r"(?<!\\)%\s*(.*)$")
+
+
+def latex_sentences(text, split):
+    """Split raw LaTeX; a sentence that opens with \\citet{} is still a new
+    sentence (the splitter wants a capital), so citations are swapped for
+    capitalised placeholders while splitting and put back after."""
+    keep = []
+
+    def hold(m):
+        keep.append(m.group(0))
+        return "Cite%dq" % (len(keep) - 1)
+    out = split(CITE_ANY_RE.sub(hold, text))
+    return [re.sub(r"Cite(\d+)q", lambda m: keep[int(m.group(1))], s).strip() for s in out]
+
+
+def comment_blocks(lines):
+    """OrderedDict {(comment, occurrence): text}: a block is the text up to and
+    including a line ending in a comment (the `% Key p.N` page comment); text
+    after the last comment is one more block, ("(no comment)", 1)."""
+    from collections import OrderedDict
+    out, buf, seen = OrderedDict(), [], {}
+    for _, line in body_lines(lines):
+        m = _COMMENT_AT_END.search(line)
+        body = re.sub(r"(?<!\\)%.*$", "", line).strip()
+        if body:
+            buf.append(body)
+        if m:
+            key = m.group(1).strip()
+            seen[key] = seen.get(key, 0) + 1
+            out[(key, seen[key])] = " ".join(buf)
+            buf = []
+    if buf:
+        out[("(no comment)", 1)] = " ".join(buf)
+    return out
+
+
+def cite_blocks(lines, split):
+    """OrderedDict {(cited keys, occurrence): text}: one block per cited study.
+    A block starts at a sentence whose first citation names other keys than
+    the current block's; a sentence with no citation joins the current block,
+    except at the start of a paragraph, where it opens a ("(no citation)", n)
+    block (a topic sentence is not the previous paragraph's study)."""
+    from collections import OrderedDict
+    out, seen = OrderedDict(), {}
+    cur, buf = "(no citation)", []
+
+    def flush():
+        if buf:
+            seen[cur] = seen.get(cur, 0) + 1
+            out[(cur, seen[cur])] = " ".join(buf)
+    for _, pl in paragraphs(body_lines(lines)):
+        text = " ".join(re.sub(r"(?<!\\)%.*$", "", t).strip() for t in pl)
+        for i, s in enumerate(latex_sentences(text, split)):
+            m = CITE_KEYS_RE.search(s)
+            keys = ",".join(sorted(k.strip() for k in m.group(1).split(",") if k.strip())) if m else None
+            if (keys and keys != cur) or (i == 0 and not keys):
+                flush()
+                cur, buf = keys or "(no citation)", []
+            buf.append(s)
+    flush()
+    return out
+
+
+def section_blocks(lines, split):
+    """Page-comment blocks when the section has page comments, else one block
+    per cited study. Returns (blocks, "comments" | "citations")."""
+    if any(_COMMENT_AT_END.search(re.sub(r"\\%", "", t)) and t.split("%", 1)[0].strip()
+           for _, t in body_lines(lines)):
+        return comment_blocks(lines), "comments"
+    return cite_blocks(lines, split), "citations"
+
+
+# ---- abbreviations defined in a text ("Long Name (ABBR)") ----------------------
+_ABBR_DEF = re.compile(r"((?:[A-Za-z][\w'-]*\s+){1,8}?)\(([A-Z][A-Za-z]{1,9}s?)\)")
+
+
+def abbreviations(text):
+    """{ABBR: long form} for every "Long Name (ABBR)" whose letters are the
+    initials of the words just before it (traumatic brain injury (TBI))."""
+    out = {}
+    for m in _ABBR_DEF.finditer(re.sub(r"\s+", " ", text)):
+        ab = m.group(2)
+        letters = [c for c in ab.rstrip("s") if c.isupper()] or list(ab.rstrip("s").upper())
+        words = m.group(1).split()
+        for n in range(len(letters), len(words) + 1):
+            cand = words[-n:]
+            initials = [w[0].upper() for w in cand if w.lower() not in ("of", "and", "the", "for", "in", "on", "to")]
+            if initials == letters:
+                out.setdefault(ab, " ".join(cand))
+                break
+    return out
+
+
+def term_variants(term, defs):
+    """Other forms of `term` under abbreviation definitions {ABBR: long form}:
+    an abbreviation in the term spelled out, a long form in the term
+    abbreviated. [(variant, "ABBR=long form")]."""
+    def one_step(t, why):
+        res = []
+        for ab, long in defs.items():
+            if re.search(r"\b%s\b" % re.escape(ab), t):
+                res.append((re.sub(r"\b%s\b" % re.escape(ab), long, t), why + ["%s=%s" % (ab, long)]))
+            if re.search(re.escape(long), t, re.I):
+                res.append((re.sub(re.escape(long), ab, t, flags=re.I), why + ["%s=%s" % (ab, long)]))
+        return res
+    # two rounds: "TBI Model Systems" -> "traumatic brain injury Model Systems"
+    # -> "TBIMS" when the paper abbreviates the whole name
+    first = one_step(term, [])
+    out = [(v, " then ".join(w)) for v, w in first]
+    for v, w in first:
+        out += [(v2, " then ".join(w2)) for v2, w2 in one_step(v, w)]
+    seen, uniq = set(), []
+    for v, why in out:
+        if v.lower() != term.lower() and v.lower() not in seen:
+            seen.add(v.lower())
+            uniq.append((v, why))
+    return uniq
+
+
+def split_cite_links(pdf):
+    """[(page, target)] for citation links split by a page break: the last
+    internal link on page p and the first on page p+1 point at the same
+    target (one citation printed across the break). None without links."""
+    try:
+        import fitz
+    except ImportError:
+        return None
+    hits, any_link, prev = [], False, None
+    with fitz.open(pdf) as d:
+        for pno in range(d.page_count):
+            links = [l for l in d[pno].get_links() if l.get("kind") in (fitz.LINK_GOTO, fitz.LINK_NAMED)]
+            if not links:
+                prev = None
+                continue
+            any_link = True
+            links.sort(key=lambda l: (round(l["from"].y0, 1), l["from"].x0))
+
+            def target(l):
+                return (l.get("page"), l.get("nameddest") or l.get("name"),
+                        round(getattr(l.get("to"), "y", 0) or 0))
+            if prev is not None and target(links[0]) == prev:
+                hits.append((pno, "%s" % (links[0].get("nameddest") or links[0].get("name")
+                                          or "page %s" % (links[0].get("page", -1) + 1))))
+            prev = target(links[-1])
+    return hits if any_link else None
+
+
 def strip_line(line):
     """One LaTeX line -> prose: comments dropped, \\citet/\\citep -> CITEX,
     other commands (with their arguments) dropped."""
     line = re.sub(r"(?<!\\)%.*", "", line).replace("\\%", "%")
-    line = re.sub(r"\\cite[tp](?:alias)?\{[^}]*\}", " CITEX ", line)
+    line = CITE_ANY_RE.sub(" CITEX ", line)    # every natbib / biblatex citation
     line = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])*(?:\{[^{}]*\})*", " ", line)
     line = line.replace("---", " — ").replace("--", "–")
     return re.sub(r"[{}~$\\]", " ", line)

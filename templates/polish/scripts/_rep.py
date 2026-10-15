@@ -34,8 +34,9 @@ def parse(text, multi):
 
 
 class Job(object):
-    def __init__(self, ctx):
+    def __init__(self, ctx, pairs_file=None):
         self.ctx = ctx
+        self.pairs_file = pairs_file   # named in the session log
         self.files = {}        # path -> {"nl", "orig", "segs": [[key, text]], "whole"}
         self.errors, self.done = [], []
 
@@ -121,4 +122,13 @@ class Job(object):
                 fh.write(text)
         for target, n, _ in self.done:
             print("%s: %d replacement(s)" % (target, n))
+        # the session log: one line per write, so the record can cite it
+        log = os.path.join(base, ".polish", "records", "session.log")
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        with open(log, "a", encoding="utf-8", newline="\n") as fh:
+            fh.write("%s  %s  %d replacement(s)  backup %s%s\n"
+                     % (time.strftime("%Y-%m-%d %H:%M:%S"),
+                        " · ".join(str(t) for t, _, _ in self.done),
+                        sum(n for _, n, _ in self.done), stamp,
+                        "  pairs " + os.path.abspath(self.pairs_file) if self.pairs_file else ""))
         return 0

@@ -3,7 +3,9 @@
 > Reconstructed 2026-08-26 by archaeology over the two parent skills' pipeline
 > specs, file headers, shard directories and session logs. Every number below
 > was read off disk, not recalled. This file is the factory's ground truth for
-> per-tier cost forecasts and for what "done" looks like at each tier.
+> per-tier pass counts and for what "done" looks like at each tier. The token
+> and hour forecasts in `tier_status.py` come from a later, measured build (51
+> style-safe papers); see the cost models in `scripts/_factory.py`.
 
 ## The one-line summary
 
@@ -30,18 +32,19 @@ For the parent build (60-paper working sample out of 165 files):
 | A3 adjudication | 5 reads | one per gate mismatch (gate 85 agree / 5 disagree = 94.4%) | chapter-map.md §2 |
 | records (PASS1) | **~27** | shards of 8–22 papers per agent per chapter (results 3×16 · intro 7×7 · data 2×~22 · …) | `records/_shards/` file counts + intro G1–G7 groups |
 | sections (PASS2) | **≥9** | one whole-record induction pass per chapter → 58 files / 306 Versions | skeleton headers ("Mined from …") |
-| exemplar tagging | **~159** | ~20 sentences per paper, three rounds (45→86→165 papers, 266→536→3,266 sentences) | exemplars.md header + 2026-07-31 log |
+| exemplar tagging | **~16** (⌈159/10⌉) | 159 papers tagged in three rounds (45→86→165 papers, 266→536→3,266 sentences), ~20 sentences per paper; dispatched ~10 papers per agent | exemplars.md header + 2026-07-31 log |
 
 Scale linearly-ish with corpus size: a 40-paper field ≈ 2/3 of these numbers.
 
 ## The two specs that ARE the recipe (carried verbatim into templates/prompts/)
 
-- **PASS1_SPEC.md** (95 lines): plain-language line per paragraph + verbatim
+- **pass1-reading-SPEC.md** (the parent's PASS1_SPEC.md, verbatim below its FACTORY NOTE): plain-language line per paragraph + verbatim
   first sentence, character-for-character including PDF damage; NO tagging
   ("labelling in pass 1 locks the induction into a taxonomy chosen before
   anything was read"); sentence counts must be right (percentiles and the
   uniformity gate are computed from them); `NOT A <CHAPTER>` is a finding.
-- **PASS2_SPEC.md** (145 lines): four-field Version blocks (Pattern / Example /
+- **pass2-induction-SPEC.md** (the parent's PASS2_SPEC.md plus one added paragraph on deferred
+  material; FACTORY NOTE at the top): four-field Version blocks (Pattern / Example /
   Use it when / Not this when), attribution `— PaperKey ¶n`, **≥2-paper
   attestation or it is a prose note, not a Version**; nothing tidied, nothing
   invented; optional sections evidence-gated; >25 KB → split into skeleton +
@@ -88,9 +91,12 @@ new field gets a manuscript, not when it gets a corpus.
 - Duplicate files: byte-identical pairs exist in real libraries; alias groups
   with a canonical key, never delete (grep-ability of examples depends on it).
 - Hand-edits inside generated files get erased by regeneration — anything
-  hand-written must live in the GENERATOR (the CurrieGruber alias lesson).
+  hand-written must live in the GENERATOR (a hand note that two keys were one
+  paper was lost when chapter-map.md was regenerated; such notes now live in
+  build_map.py's PAPER_NOTES and ADJUDICATED).
 - One shard's crash must not hide later shards; suites assert true negatives
   alongside true positives.
 - The corpus stores one paragraph per line; line-anchored regexes undercount
-  sentence-initial phenomena 2–9× (the Moreover 26→92 lesson) — always split
-  sentences with the shared textseg splitter.
+  sentence-initial phenomena 2–9× (a line-anchored `^Moreover,` found 26
+  papers; the sentence splitter found 92) — always split sentences with the
+  shared textseg splitter.

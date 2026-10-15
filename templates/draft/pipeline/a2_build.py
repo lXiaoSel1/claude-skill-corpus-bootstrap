@@ -30,8 +30,7 @@ FOLLOW = 600          # chars of following prose per candidate
 d = json.load(open(os.path.join(BASE, "a1_candidates.json"), encoding='utf-8'))
 
 # wave assignment straight from sample.md (word-count balanced; written by
-# pipeline/make_sample.py). FACTORY FIX 2026-10-07: the pattern accepted only
-# waves 1-4, so papers placed in wave 5+ silently received no A2 input.
+# pipeline/make_sample.py); any number of waves.
 wave = {}
 for ln in open(SAMPLE, encoding='utf-8'):
     m = re.match(r'^\|\s*(\d{1,2})\s*\|\s*`([^`]+)`', ln)
@@ -78,5 +77,6 @@ for w in sorted(set(wave.values())):
             out.append(f"HEADING: {c['verbatim']}")
             out.append(f"FOLLOWS: {body_after(body_lines, c)}")
     p = os.path.join(BASE, f"a2_wave{w}.md")
-    open(p, 'w', encoding='utf-8').write("\n".join(out))
+    with open(p, 'w', encoding='utf-8') as _fh:
+        _fh.write("\n".join(out))
     print(f"wave {w}: {len(keys):2d} papers, {n:4d} candidates, {os.path.getsize(p)//1024:4d} KB -> {p}")

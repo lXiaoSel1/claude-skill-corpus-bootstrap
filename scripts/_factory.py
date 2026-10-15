@@ -24,11 +24,39 @@ TODAY = datetime.date.today().isoformat()
 PY = "py -3" if os.name == "nt" else "python3"
 # a field slug: lowercase ASCII letters and digits, single hyphens between
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+STYLES = ("author-year", "numeric", "mixed")      # field-config citation_style
+
+# ---- cost models (tier_status.py and canon_ingest.py read these) -------------
+# Agent passes per tier: the parent build's counts on its 60-paper sample
+# (references/provenance.md), scaled by this field's style-safe papers.
+PASS_MODEL = {"papers": 60, "a2": 8, "a2_min": 4, "pass1": 27, "pass1_min": 4,
+              "tag_per_agent": 10}
+# Tokens processed (millions) and wall-clock hours per tier, measured from the
+# transcripts of a 51-style-safe-paper build (2026-10-07): subagent runs per
+# tier (Tier 2 21M, Tier 3 PASS-1 79M + PASS-2 172M, Tier 4 44M) plus the
+# coordinating main session (172M), shared out in proportion; about 96% was
+# prompt-cache reads. Scaled linearly by style-safe papers.
+TOKEN_MODEL = {"papers": 51, "tokens_m": {2: 32.4, 3: 387.6, 4: 68.0},
+               "hours": {2: 0.7, 3: 7.9, 4: 1.4}}
+# Drafting structure-canon.md, measured once (2026-10-14): 17 guides, 151,547
+# words, 35 rules -> one agent, 101 tool calls, 14 min, 10.1 million tokens
+# processed (97% prompt-cache reads). The work is mostly per rule, so half the
+# cost is taken as fixed and half as growing with the guides' length -- an
+# assumption until a second run is measured.
+CANON_MODEL = {"words": 151547, "tokens_m": 10.1, "minutes": 14, "fixed_share": 0.5}
 
 
 def die(msg, code=2):
     sys.stderr.write(msg.rstrip() + "\n")
     sys.exit(code)
+
+
+def safe_key(s, sep="_", allowed=r"A-Za-z0-9_\-"):
+    """A file-safe key: every run of characters outside `allowed` becomes
+    `sep`, leading and trailing _ and - are trimmed. Each caller keeps the
+    separator it has always used (ingest "", onboard "_", canon_ingest "-"),
+    so existing fields' keys and corpus file names do not change."""
+    return re.sub(r"[^%s]+" % allowed, sep, s).strip("_-")
 
 
 def norm_field(field):

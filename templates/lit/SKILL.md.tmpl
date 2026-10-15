@@ -75,7 +75,9 @@ Three properties make that class of failure structural rather than incidental:
   one class; a phrase wrapped across a line still matches), British/American spelling,
   hyphen/space (`de-risking` ~ `de risking` ~ `derisking`) and the suffix family all run, and
   the report says how many hits each variant added. A bare zero is never returned without
-  evidence that every variant also failed.
+  evidence that every variant also failed. A multi-word phrase found **only** through the
+  suffix family (the papers say "in the review", not "in the reviews") is at most THIN:
+  read the concordance before using it.
 
 **Quote the denominator the script gives you, never the raw file count.**
 `references/corpus_meta.yaml` carries four (live values mirrored in `registry.json` →
@@ -130,7 +132,7 @@ Rebuild the manifest with `py -3 scripts/build_corpus_meta.py` if the corpus cha
 | 6 | **OUTPUT** — corrected passage, then `TERMS`, then `REGISTER`, then the change table | 0 |
 | 7 | **CACHE** — `py -3 scripts/cache.py add "<term>" …` for everything this run established. Nothing is lost between runs | 1 |
 
-**Budget: ≤9 tool calls; no subagent unless `--audit`.** Allocation: passage 1 · `register.md` 1 · `terms.md` 1 ·
+**Budget: ≤9 tool calls; no subagent unless `--audit`** (run inside `{{FIELD}}-polish`, the budget does not apply: see its step d). Allocation: passage 1 · `register.md` 1 · `terms.md` 1 ·
 **`attest.py` ≥1, not skippable** · **`cohesion.py` 1 (≥3-sentence passages, not skippable)** ·
 replacement evidence 0–2 · `cache.py` 1.
 
@@ -174,7 +176,7 @@ did. That is deliberate: a checklist answered from memory is answered "yes".
 | Verbs | Personifying / metaphorical verbs — `courts, lifts, climbs, loads, tilts, pulls, pushes, reshapes, invites, drains` and anything in that pattern → **raise as a question with the attest.py concordance attached** (R2 is judgment-only: noun/verb homographs make it unmeasurable) and offer a §1 plain verb | §1 R2 |
 | Glue | Explanatory connectives used as the **author's own** link: `so`, `since`, `because … and this is`, `thereby`, `therefore`, `in order to`, `as a result` | §1 |
 | Nouns | Vague stand-ins where the corpus names the specific institution, programme or quantity. *(parent: `the insurer` → `the PBGC` in pensions — in another field `the insurer` may itself BE the corpus term; attest before replacing)* | §3 |
-| Terms | Every domain noun phrase in the passage, checked against the corpus. **Extract them all first, then judge** — the ones that fail are never the ones you suspected. Highest-yield shapes: coined compounds (`re-risking`, `adviser scale`, `information-capacity`), plausible-but-absent variants of a real term (`fund ratio` for `funding ratio`, `adopt relief` for `elect relief`), imported jargon from another field (`boundary condition`, `liquid-asset retention`), and superlative modifiers (`top tier`, `top-ten`) | §3 |
+| Terms | Every domain noun phrase in the passage, checked against the corpus. **Extract them all first, then judge** — the ones that fail are never the ones you suspected. Highest-yield shapes (parent examples): coined compounds (`re-risking`, `adviser scale`, `information-capacity`), plausible-but-absent variants of a real term (`fund ratio` for `funding ratio`, `adopt relief` for `elect relief`), imported jargon from another field (`boundary condition`, `liquid-asset retention`), and superlative modifiers (`top tier`, `top-ten`) | §3 |
 | AI voice | **Only the R6 items THIS corpus measured rare** (`register-measurements.md` table D) — everything else goes through the R4 gate first. Never re-add a phrase the corpus uses in ≥3 papers (§6 R5) | §6 R4–R6 |
 | Cohesion | Run `py -3 scripts/cohesion.py` and fill the JOINS table (R9, N−1 rows) + the PARAGRAPH row (R10, incl. the mandatory M8-pair adjudication). Flag: a join with no carrier and no nameable relation; a bare `This`/`These` with no antecedent; a connective asserting a relation the prose does not carry. Do NOT flag an opener the corpus uses sentence-initially in ≥3 papers (`register-measurements.md` A2) | §8 R9–R11 |
 | Citations | Only for an author-year (natbib) manuscript: `\citep{}` where the work is the sentence's subject should be `\citet{}`. Numeric/superscript manuscripts: no citation-form rule — mechanical, never a content change | — |
@@ -182,8 +184,8 @@ did. That is deliberate: a checklist answered from memory is answered "yes".
 ## The three-test rule for terminology
 
 **A count is not attestation — read the concordance.** `py -3 scripts/attest.py "term one" "term two"`
-searches each term independently (never alternated; that alternation is what produced the position-379
-false zero) and always returns KWIC context with its source paper. Judge from the returned lines, never
+searches each term independently (never alternated; in the parent build that alternation produced the
+position-379 false zero) and always returns KWIC context with its source paper. Judge from the returned lines, never
 from the `w:` number alone; the three tests below are applied to what the concordance shows.
 
 A term is attested only if a hit is (1) **word-bounded**, (2) **standalone, not a compound prefix**, and
@@ -197,6 +199,9 @@ Attested → record the evidence. In the manuscript but not the corpus → ⚠�
 never silently keep or cut. In neither → offer the corpus-standard term.
 
 ## Output
+
+<!-- PARENT-EXAMPLE -->
+> *Parent example (economics/finance): the shape is the lesson; the names and numbers are not this field's.*
 
 The example below is the **parent's** (economics/pensions) — copy its SHAPE; every term, count and
 denominator in a real run comes from this instance's corpus.
@@ -260,6 +265,8 @@ READS LIKE THE LITERATURE: <yes / mostly, n fixes / not yet, m structural issues
 → cached: py -3 scripts/cache.py add "equity share" "re-risking" "top tier"
 ```
 
+<!-- /PARENT-EXAMPLE -->
+
 ### The two blocks are slots, not reminders
 
 `TERMS` and `REGISTER` both print **every row every time, including the rows that found nothing** —
@@ -281,8 +288,8 @@ the first is ever true.
 
 ## References
 
-All paths are anchored at `.claude/skills/{{FIELD}}-lit/` (this skill's own folder) — not at the
-working directory, and never at the parent `mimic-lit/`, whose corpus is economics.
+All paths are relative to this skill's own folder (`{{FIELD}}-lit/`, wherever it was stamped), not
+to the working directory.
 
 **Every reference is one hop from this file.** Anthropic's skill guidance notes that a reference
 reached *through another reference* may be previewed with `head -100` rather than read whole,

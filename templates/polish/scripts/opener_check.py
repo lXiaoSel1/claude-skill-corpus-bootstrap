@@ -8,7 +8,10 @@ The blind spot this targets: the sweep flags only frames found in 0 corpus
 papers, so a paragraph-opening frame found in 1-2 papers passes, and L2 sees
 only frames used twice. Here every opener is printed for attest.py, and each
 sentence-initial connective (the words before the first comma, at most
-`opener_max_lead_words`) is counted among corpus paragraph openers.
+`opener_max_lead_words`) is counted among corpus paragraph openers. Longer
+lead-ins ("After controlling for pre-injury employment,") escape that limit,
+so the first three words of every sentence are counted too, and those used
+twice or more in a section are listed for attest.py.
 
 RUN
     py -3 scripts/opener_check.py <section> [section ...]
@@ -48,10 +51,16 @@ def clean(t):
 
 def lead(s):
     """sentence-initial connective: the words before the first comma, if few enough."""
-    m = re.match(r"([A-Z][A-Za-z ]{1,40}?),", s)
+    m = re.match(r"([A-Z][A-Za-z \-]{1,40}?),", s)
     if m and len(m.group(1).split()) <= MAXW:
         return m.group(1)
     return None
+
+
+def first3(s):
+    """The first three words of a sentence (a citation start excluded)."""
+    ws = re.findall(r"[A-Za-z][A-Za-z\-']*", s)
+    return " ".join(ws[:3]) if len(ws) >= 3 and not s.startswith("CITE") else None
 
 
 def corpus_count(phrase):
@@ -67,7 +76,7 @@ for sec in ctx.sections(ctx.args):
              for _, pl in _rp.paragraphs(_rp.section_body(sec), comment_breaks=True)]
     paras = [p for p in paras if p.strip()]
     print("== %s: %d paragraphs" % (sec.key, len(paras)))
-    leads = Counter()
+    leads, starts = Counter(), Counter()
     for i, p in enumerate(paras, 1):
         sents = [s for s in split_sentences(p) if len(s.split()) >= 3]
         if not sents:
@@ -78,8 +87,19 @@ for sec in ctx.sections(ctx.args):
             c = lead(s)
             if c and not c.startswith("CITE"):
                 leads[c] += 1
+            f = first3(s)
+            if f:
+                starts[f] += 1
     print("  sentence-initial connectives (draft count -> corpus paragraph openers: hits/papers):")
     for c, n in leads.most_common():
         h, pp = corpus_count(c)
         print("    %-40r x%d  ->  %d/%d" % (c, n, h, pp))
+    rep = [(f, n) for f, n in starts.most_common() if n >= 2]
+    print("  repeated sentence-initial frames (first 3 words, used >= 2 times; attest each with"
+          " --scope style):")
+    for f, n in rep:
+        h, pp = corpus_count(f)
+        print("    %-40r x%d  ->  %d/%d" % (f, n, h, pp))
+    if not rep:
+        print("    none")
     print()

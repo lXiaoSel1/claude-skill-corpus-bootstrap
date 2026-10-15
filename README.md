@@ -245,7 +245,7 @@ To keep the cost under control:
 - Build Tier 3 one chapter at a time, as the tier table says, and check your usage between chapters.
 - If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
 
-**`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. One-step onboarding itself runs Tiers 0 and 1 as scripts.
+**`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. A second run on the same section, after the 1.4.0 fixes, took 114 tool calls, about 37 minutes and about 32 million tokens. One-step onboarding itself runs Tiers 0 and 1 as scripts.
 
 **Drafting the structure canon** (Tier 4) was measured on its own. One agent drafted it from the original build's 17 guides (about 152,000 words) with 101 tool calls in 14 minutes. It processed about 10 million tokens, 97% of them re-read from the prompt cache (about 0.28 million tokens of new input and output). `tier_status.py` scales this figure to the length of your guides.
 
@@ -322,7 +322,7 @@ py -3 scripts/onboard.py --finish --field ecology
 
 Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. To add the third skill to a field stamped before 1.2.0, run `py -3 scripts/stamp.py ecology --add polish`.
 
-Reading notes (`--notes`) are Markdown files, one per paper, named after the citation key (`Smith2019.md`). A line such as `pdf: ../pdfs/smith-2019.pdf` near the top links the note to its PDF (a relative path starts from the note's folder). Quoted sentences with their page on the same line, such as `- "medical spending rose after the reform" (p.4)`, are what the polish step e script `note_terms.py` reads.
+Reading notes (`--notes`) are Markdown files, one per paper, named after the citation key (`Smith2019.md`). A line such as `pdf: ../pdfs/smith-2019.pdf` near the top links the note to its PDF (a relative path starts from the note's folder). Quoted sentences with their page on the same line, such as `- "medical spending rose after the reform" (p.4)`, are what the polish step e script `note_terms.py` reads. Onboarding with `--notes` also writes `<field>-draft/references/notes-index.md`, which `<field>-draft` uses to find a note for each citation.
 
 Onboarding and `<field>-polish` keep their working files in a `.polish/` folder next to your `main.tex`: the library index, snapshots and backups. Add `.polish/` to your manuscript's `.gitignore`, or leave it out of Overleaf sync.
 
@@ -358,7 +358,7 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 
 **Or do it by hand.**
 
-1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. Until you change it, `canon_dir` points at the factory's own `corpus-bootstrap/references/canon-sources/` (`canon_ingest.py` uses the `-draft` skill's folder instead). To use another folder, set `canon_dir` in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
+1. Save each one as UTF-8 text named `<key>.txt` in one folder, and list it in that folder's `_manifest.md`. `canon_dir` points at the `-draft` skill's own `references/canon-sources/` (empty when the field is stamped), the same folder `canon_ingest.py` fills. To use another folder, set `canon_dir` in both of the field's `field-config.yaml` files (the `-lit` and the `-draft` copy).
 2. At Tier 4, record the number of guide files and at least three verbatim spot quotes (fewer only when you have fewer guides) under `canon_sources` in the `-draft` skill's `references/registry.json`, keyed by file: `"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "a sentence copied from that file"}}`. `check_drift` searches for each quote in its file.
 3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. You can start from the skeleton in `templates/draft/references/`. `check_drift` also requires the file to mention `canon-sources` and to carry `TO-MEASURE` tags for rules not yet measured, and `check_canon_quotes.py` checks the quotes.
 
@@ -368,19 +368,21 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 py -3 tests/run_selftest.py
 ```
 
-The self-test runs 135 checks in five parts:
+The self-test runs 170 checks in six parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
 3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script except `compile.py` (which needs TeX) runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
 4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
 5. The inputs that broke 1.3.0: biblatex citations, field names and keywords that used to break stamping, a folder with brackets, an upper-case `.PDF`, an interrupted ingest, working papers at Tier 0, an empty Tier 3 registry, and writing guides with no PDF converter available.
+6. The 1.4.0 changes: parent names and numbers left unlabelled in the templates, unpaired parent markers, every changed polish script (sweep, cohesion_loop, opener_check, sent_diff, trial_diff, counts, compile, source_term_check, pdf_ctx, note_terms, rep), `attest.py` on a phrase found only through other forms of its last word, and the draft and lit scripts no earlier part ran (draftcheck, state, build_evidence_map, build_exemplars, cache).
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
 
 ## Troubleshooting
 
 - **A paper is flagged SCAN, SHORT or INTERLEAVED.** SCAN means the PDF has no text layer: OCR it and ingest it again, or leave it excluded. SHORT often means only an abstract or a landing page was saved: download the full paper. INTERLEAVED means two columns were read across each other: run `ingest.py` again with the same `--src` or `--map` plus `--force KEY --converter pymupdf` (`tier0_accept.py` does this for you when PyMuPDF is installed).
+- **`check_drift` says a PARENT-BLOCK is left for a built tier.** The block holds the original build's text for that tier. Rewrite it from this field's own measurements and delete its two marker lines. PARENT-EXAMPLE blocks are kept examples and stay.
 - **`stamp.py` refuses to overwrite.** A stamped skill holds measured state. To start over, delete the field's three folders yourself.
 - **A script cannot find the field.** If you stamped with `--dest`, pass the same `--dest` again.
 - **Two different `pdftotext` builds.** On Windows, PowerShell and Git Bash can find different ones (for example MiKTeX's and Git's). Pin one with `pdftotext:` in both `field-config.yaml` files.
@@ -393,13 +395,10 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
 - **English corpora only.** The sentence splitter, word lists and corpus measurements assume English.
 - **Windows first.** Documentation and printed hints assume `py -3`. The scripts themselves are cross-platform.
 - **Manuscript paths.** Use absolute paths for `manuscript_tex` and `manuscript_tables` in `field-config.yaml` (onboarding writes them that way). A relative path is read from the project folder only when the skills sit in `<project>/.claude/skills/`; anywhere else the scripts stop and ask for an absolute path.
-- **Some optional steps use skills or agents that are not included.** `<field>-lit --audit` calls a `humanize-auditor` agent, and `<field>-draft` can fork a `claim-verifier` agent; both are off by default. Polish step f uses the `humanizer` skill when it is installed, and falls back to the included `references/humanizer-G.md`. The skills also suggest other skills for the next step (`/proofread`, `/review-paper`, `/verify-claims`, `/seven-pass-review`, `/audit-reproducibility`); none of them is needed.
-- **`<field>-polish` has known gaps.** Its first end-to-end run (2026-10-14) completed every step and passed every check, and it also found problems that are not fixed yet:
-  - step c needs step e's verdicts on source terms, and the edits from step c must be written before steps d and d2 read the file;
-  - the list of one-off frames (L2b) is long and is mostly ordinary grammar;
-  - when the corpus barely covers a section's topic, the "at least 3 papers" rule cannot be met, and the skill gives no fallback;
-  - `attest.py` reports a multi-word phrase as attested when only a variant of it matched;
-  - the scan counts each citation as a word of sentence length, and reads "OR" (odds ratio) as "or".
+- **Some optional steps use skills or agents that are not included.** `<field>-lit --audit` calls a `humanize-auditor` agent, and `<field>-draft` can fork a `claim-verifier` agent; both are off by default. Polish step f follows the included `references/humanizer-G.md`; when the `humanizer` skill is installed, its section G can be used instead. The skills also suggest other skills for the next step (`/proofread`, `/review-paper`, `/verify-claims`, `/seven-pass-review`, `/audit-reproducibility`); none of them is needed.
+- **`<field>-polish` has known gaps.** Its first end-to-end run (2026-10-14) found 23 problems, and 1.4.0 fixes them. A second run on the same section after the fixes passed every check and found 18 more; 1.4.0 fixes 16 of them. Two remain:
+  - `scan_appositive.py` lists noun-phrase tails only, so a tail such as ", with no change over time" has to be found by reading;
+  - when the sweep runs again after your edits, it lists the frames now in the section, not which ones the edits added. Save each run's output and compare them.
 - **"The parent" in the files.** The recipe was first built by hand as a pair of skills for empirical finance writing. Those skills are not part of this repository, and the factory does not need them. Where the files say "the parent", they mean that original pair, and its numbers appear only as illustrations.
 
 ## Repository layout
@@ -425,6 +424,6 @@ docs/images/                screenshots used in this README
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Version 1.3.1 (2026-10-14).
+MIT. See [LICENSE](LICENSE). Version 1.4.0 (2026-10-14).
 
 Written by Xuan Tang, in a project built on Pedro Sant'Anna's [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) template for academic work with Claude Code.

@@ -322,8 +322,8 @@ def write(rows, prows, n_papers, words):
         old = io.open(OUT, encoding="utf-8").read()
         if HAND_MARKER in old:
             kept = "\n" + old[old.index(HAND_MARKER):]
-    io.open(OUT, "w", encoding="utf-8", newline="\n").write(
-        "\n".join(L) + kept)
+    with io.open(OUT, "w", encoding="utf-8", newline="\n") as _fh:
+        _fh.write("\n".join(L) + kept)
     print("\nwrote %s%s" % (OUT, "  (hand-written tail preserved)"
                             if kept else ""))
     record(rows, prows, n_papers, words)
@@ -345,8 +345,8 @@ def record(rows, prows, n_papers, words):
         "textseg.clean_prose cut (attest.py's default). Zero-hit verbs and "
         "phrases are omitted; HOMOGRAPH verbs are counted but their numbers "
         "are mostly the noun." % (n_papers, "{:,}".format(words)))
-    io.open(REG, "w", encoding="utf-8", newline="\n").write(
-        json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
+    with io.open(REG, "w", encoding="utf-8", newline="\n") as _fh:
+        _fh.write(json.dumps(reg, indent=2, ensure_ascii=False) + "\n")
     print("recorded %d counts in %s" % (len(counts), REG))
 
 

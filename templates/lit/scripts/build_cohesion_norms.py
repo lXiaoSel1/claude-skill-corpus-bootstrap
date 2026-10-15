@@ -147,7 +147,7 @@ def main():
     cells = defaultdict(lambda: {"n_paragraphs": 0, "sent_counts": [],
                                  "samples": defaultdict(list)})
     adjud = defaultdict(int)
-    # FACTORY FIX 2026-10-07: the fine (slice) pass used to feed the SAME
+    # the fine (slice) pass used to feed the SAME
     # adjudication counter, so every sliced paragraph was counted twice
     # (the mathematics instance's pairs jumped 6,923 -> 8,157 after Tier 2). Adjudications are
     # corpus-level facts: coarse pass only; fine cells get a throwaway counter.

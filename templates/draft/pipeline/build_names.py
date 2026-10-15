@@ -180,7 +180,8 @@ L += ["> **TO-MEASURE.** Traps that only reading reveals — a word this field u
       ""]
 
 p = os.path.join(REF, "chapter-names.md")
-open(p, 'w', encoding='utf-8').write("\n".join(L))
+with open(p, 'w', encoding='utf-8') as _fh:
+    _fh.write("\n".join(L))
 print(f"wrote {p} ({os.path.getsize(p)//1024} KB)")
 for j in JOBS:
     print(f"  {j:26s} {len(papers_with[j]):2d}/{N_PAPERS:<2d}  top {len(top[j]):3d} titles · sub {len(sub[j]):3d}")

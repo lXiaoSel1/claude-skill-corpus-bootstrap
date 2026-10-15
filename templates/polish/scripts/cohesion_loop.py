@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Step d -- run {{FIELD}}-lit's cohesion.py on every paragraph of >= 3 sentences
-in the named sections and print a compact digest: the grade of every join,
-the WEAK/BROKEN joins in full, the percentile tails, and the M8 pair the
-review must adjudicate.
+in the named sections and print a compact digest: every join with its grade,
+overlap and carriers (the rows the -lit JOINS table needs; WEAK/BROKEN marked
+!), the percentile tails, and the M8 pair the review must adjudicate.
 
 The norm cell is the lit field-config's `intro_job` (override with
 polish.yaml `cohesion_section`).
@@ -35,8 +35,9 @@ LABELS = [("m6b_singleton_rate", "M6b singleton rate"),
 
 def clean(line):
     line = re.sub(r"(?<!\\)%.*", "", line).replace("\\%", "%").replace("\\$", "$").replace("\\&", "&")
-    line = re.sub(r"\\citet\{([A-Za-z]+)[^}]*\}", r"\1 et al.", line)
-    line = re.sub(r"\\cite[tp](?:alias)?\{[^}]*\}", "", line)
+    line = re.sub(r"\\(?:citet|textcite|Citet|Textcite)\*?(?:\[[^\]]*\]){0,2}\{([A-Za-z]+)[^}]*\}",
+                  r"\1 et al.", line)
+    line = _rp.CITE_ANY_RE.sub("", line)
     line = re.sub(r"\\'\{(\w)\}", r"\1", line)
     line = re.sub(r"\\[a-zA-Z]+\*?", " ", line)
     return re.sub(r"[{}~]", "", line).replace("---", " — ").replace("--", "–")
@@ -69,9 +70,9 @@ for sec in ctx.sections(ctx.args):
               % (i, len(joins) + 1, out.get("length_bin"), JOB))
         print("     joins: " + " ".join(j["grade"] for j in joins))
         for j in joins:
-            if j["grade"] in ("WEAK", "BROKEN", "BROKEN?"):
-                print("     ! %-8s %-11s overlap %.2f  %s"
-                      % (j["pair"], j["grade"], j["overlap_prop"], " · ".join(j.get("carriers", []))))
+            print("     %s %-8s %-11s overlap %.2f  %s"
+                  % ("!" if j["grade"] in ("WEAK", "BROKEN", "BROKEN?") else " ", j["pair"],
+                     j["grade"], j["overlap_prop"], " · ".join(j.get("carriers", [])) or "-"))
         for key, label in LABELS:
             pct = m.get(key + "_pct")
             if pct is not None and (pct <= 10 or pct >= 90):

@@ -70,7 +70,7 @@ _BOUNDARY = re.compile(
 # The lookahead admits digits and opening quotes: "…fell in 2008. 2009 saw a
 # recovery." is two sentences, and so is a boundary before '‘'.  Both were
 # silently merged before this class was widened -- measured.
-# FACTORY FIX 2026-10-07: the optional group admits a flattened superscript
+# the optional group admits a flattened superscript
 # citation between the full stop and the space ("reform.12,13 However"), the
 # dominant citation form in medical/health journals after pdftotext. Before,
 # such pairs merged into one sentence and sentence-initial connectives were
@@ -182,17 +182,12 @@ try:
     PARA_MIN_CHARS = _fc.para_min_chars()
 except Exception:            # imported outside an instance (factory tests)
     PARA_MIN_CHARS = 150
-# ONE value per instance, read from field-config.yaml `para_min_chars` -- the
-# 2026-08 template hardcoded 400 here AND 400 again in build_cohesion_norms,
-# and the mathematics instance edited only one of them (textseg 150, norms 400): the cells were
-# measured with a threshold the JSON did not record. check_drift now asserts
-# config == norms JSON.
-# CALIBRATE PER CORPUS -- it is a PDF-line-wrapping constant, not a
-# universal.  400 was measured on the parent's finance PDFs; a mathematics corpus
-# measured 150.  Procedure: sweep thresholds over the style-safe corpus, pick the one
-# whose per-paper block count is closest to ~60 with the least reference-line
-# contamination, write it to field-config.yaml, and record the sweep in the
-# register measurements.
+# ONE value per instance, read from field-config.yaml `para_min_chars`; the
+# cohesion norms record the value they were built with, and check_drift
+# asserts config == norms JSON. It is a PDF-line-wrapping constant, not a
+# universal, so it is calibrated per corpus at Tier 1 by corpus-bootstrap's
+# scripts/calibrate_paragraphs.py (the most recovered paragraphs with no
+# paper at zero; the sweep is written to references/para-calibration.md).
 
 PARA_MIN_SENTS = 3
 # Below three sentences there are no interior joins to measure and the binary
@@ -204,7 +199,7 @@ try:
 except Exception:
     PARA_MODE = "auto"
 BLOCK_MODE_LINE_SHARE = 0.10
-# FACTORY FIX 2026-10-07: paragraph recovery assumed ONE PARAGRAPH PER LINE --
+# paragraph recovery assumed ONE PARAGRAPH PER LINE --
 # true of the parent corpus, false of poppler's default output, which keeps
 # the PDF's physical lines (a health-policy corpus: median line 33 chars, 2.4% of
 # lines >= 150). Line mode recovered almost no paragraphs there. "block" mode

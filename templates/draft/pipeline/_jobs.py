@@ -162,10 +162,9 @@ def manuscript_paths():
 
 
 def canon_dir():
-    """Where the writing-canon sources live (Tier 4). Config key canon_dir;
-    default: the factory next to this instance's original location."""
+    """Where this field's writing guides live (Tier 4): config key canon_dir,
+    else this skill's own references/canon-sources."""
     v = cp.as_str(_DATA.get("canon_dir"))
     if v:
         return v
-    return os.path.normpath(os.path.join(SKILL, "..", "corpus-bootstrap",
-                                         "references", "canon-sources"))
+    return os.path.join(SKILL, "references", "canon-sources")

@@ -245,7 +245,7 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - 第 3 关按工作方式表里说的逐章做，每做完一章看一下用量。
 - 如果只需要审稿功能，做完第 1 关就可以停：`<field>-lit` 从那时起就能用。
 
-**`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。一键接入本身的第 0、1 关只跑脚本。
+**`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。1.4.0 修完后在同一节上再跑一次，用了 114 次工具调用、约 37 分钟、约 3,200 万 token。一键接入本身的第 0、1 关只跑脚本。
 
 **起草结构准则**（第 4 关）单独测过一次。一个子代理用最初那次搭建的 17 篇指南（约 15.2 万词）起草，调用了 101 次工具，用时 14 分钟，处理约 1,000 万 token，其中 97% 是从提示缓存里重复读取的（新输入加输出约 28 万）。`tier_status.py` 会按你的指南长度换算这个数。
 
@@ -322,7 +322,7 @@ py -3 scripts/onboard.py --finish --field ecology
 
 之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。1.2.0 之前生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
 
-阅读笔记（`--notes`）是 Markdown 文件，每篇论文一个，文件名用引用 key（`Smith2019.md`）。在开头附近写一行 `pdf: ../pdfs/smith-2019.pdf`，就把笔记和 PDF 对上了（相对路径从笔记所在的文件夹算起）。polish 第 e 步的 `note_terms.py` 读的是同一行带页码的引文，例如 `- "medical spending rose after the reform" (p.4)`。
+阅读笔记（`--notes`）是 Markdown 文件，每篇论文一个，文件名用引用 key（`Smith2019.md`）。在开头附近写一行 `pdf: ../pdfs/smith-2019.pdf`，就把笔记和 PDF 对上了（相对路径从笔记所在的文件夹算起）。polish 第 e 步的 `note_terms.py` 读的是同一行带页码的引文，例如 `- "medical spending rose after the reform" (p.4)`。带 `--notes` 一键接入时，还会写出 `<field>-draft/references/notes-index.md`，`<field>-draft` 靠它给每条引用找到笔记。
 
 一键接入和 `<field>-polish` 会把工作文件放在 `main.tex` 旁边的 `.polish/` 文件夹里：文献索引、快照和备份。请把 `.polish/` 加进稿件的 `.gitignore`，或者不让它同步到 Overleaf。
 
@@ -358,7 +358,7 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 
 **手动做。**
 
-1. 把每篇存成 UTF-8 文本，文件名用 `<key>.txt`，放进同一个文件夹，并在这个文件夹的 `_manifest.md` 里登记。不改的话，`canon_dir` 指向工厂自己的 `corpus-bootstrap/references/canon-sources/`（`canon_ingest.py` 用的则是 `-draft` skill 里的文件夹）。想用别的文件夹，就把这个领域两份 `field-config.yaml`（`-lit` 和 `-draft` 各一份）里的 `canon_dir` 都改过去。
+1. 把每篇存成 UTF-8 文本，文件名用 `<key>.txt`，放进同一个文件夹，并在这个文件夹的 `_manifest.md` 里登记。`canon_dir` 指向 `-draft` skill 自己的 `references/canon-sources/`（生成领域时是空的），也就是 `canon_ingest.py` 写入的那个文件夹。想用别的文件夹，就把这个领域两份 `field-config.yaml`（`-lit` 和 `-draft` 各一份）里的 `canon_dir` 都改过去。
 2. 到第 4 关时，在 `-draft` skill 的 `references/registry.json` 里，`canon_sources` 下填上指南的文件数和至少三句逐字摘录（指南不到三篇时可以少于三句），摘录按文件名登记：`"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "从这个文件里原样复制的一句话"}}`。`check_drift` 会到对应文件里逐句查找这些摘录。
 3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。可以从 `templates/draft/references/` 里的骨架开始写。`check_drift` 还要求文件里写到 `canon-sources`，并给还没测量的规则标上 `TO-MEASURE`；引文用 `check_canon_quotes.py` 核对。
 
@@ -368,19 +368,21 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 py -3 tests/run_selftest.py
 ```
 
-共 135 项检查，分五部分：
+共 170 项检查，分六部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
 3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 除 `compile.py`（它需要 TeX）以外的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
 4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
 5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
+6. 1.4.0 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
 ## 疑难排解
 
 - **论文被标成 SCAN、SHORT 或 INTERLEAVED。** SCAN 表示 PDF 没有文字层：做一遍 OCR 再导入，或者就让它排除。SHORT 往往是只存下了摘要或网页：去下载全文。INTERLEAVED 表示两栏被交错读到了一起：用原来的 `--src` 或 `--map` 再跑一次 `ingest.py`，加上 `--force KEY --converter pymupdf`（装了 PyMuPDF 时，`tier0_accept.py` 会替你做）。
+- **`check_drift` 说某个已建好的关还留着 PARENT-BLOCK。** 这个块里是最初那次搭建在这一关的内容。用本领域自己的测量结果重写它，再删掉它的两行标记。PARENT-EXAMPLE 块是保留的示例，不用动。
 - **`stamp.py` 拒绝覆盖。** 生成的 skill 里存着测量结果。想从头来，请自己删掉这个领域的三个文件夹。
 - **脚本找不到这个领域。** 如果生成时用了 `--dest`，就再带上同样的 `--dest`。
 - **找到了两个不同的 `pdftotext`。** Windows 上 PowerShell 和 Git Bash 可能各找到一个（比如 MiKTeX 的和 Git 的）。在两份 `field-config.yaml` 里用 `pdftotext:` 固定一个。
@@ -393,13 +395,10 @@ py -3 tests/run_selftest.py
 - **只支持英文语料。** 分句、词表和各项测量都以英文为前提。
 - **以 Windows 为主。** 文档和提示信息默认用 `py -3`，脚本本身跨平台。
 - **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径（一键接入就是这样写的）。只有 skill 装在 `<项目>/.claude/skills/` 下时，相对路径才按项目文件夹解析；装在别处时，脚本会停下来要求写绝对路径。
-- **部分可选步骤会用到仓库里没有的 skill 或 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`，两者默认都关闭。polish 的 f 步装了 `humanizer` skill 就用它，没有就用仓库自带的 `references/humanizer-G.md`。各 skill 还会建议下一步用别的 skill（`/proofread`、`/review-paper`、`/verify-claims`、`/seven-pass-review`、`/audit-reproducibility`），这些都不是必需的。
-- **`<field>-polish` 还有已知的缺口。** 它第一次完整运行（2026-10-14）时每一步都走完了，检查也都通过，同时暴露了一些还没修的问题：
-  - c 步要用到 e 步对原文术语的结论，而 c 步的改动又必须在 d、d2 读文件之前写进去；
-  - 一次性框架（L2b）的清单很长，大多是普通的语法组合；
-  - 语料几乎覆盖不到某一节的主题时，“至少 3 篇”的规则满足不了，skill 也没给退路；
-  - `attest.py` 对多词短语只靠变体命中，也会判为有据；
-  - 扫描算句长时把每个引用算作一个词，还把 “OR”（比值比）当成 “or”。
+- **部分可选步骤会用到仓库里没有的 skill 或 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`，两者默认都关闭。polish 的 f 步按仓库自带的 `references/humanizer-G.md` 做；装了 `humanizer` skill 时，也可以改用它的 G 节。各 skill 还会建议下一步用别的 skill（`/proofread`、`/review-paper`、`/verify-claims`、`/seven-pass-review`、`/audit-reproducibility`），这些都不是必需的。
+- **`<field>-polish` 还有已知的缺口。** 它第一次完整运行（2026-10-14）时找出 23 个问题，1.4.0 都已修好。修完后在同一节上再跑一次，检查全部通过，又找出 18 个问题，1.4.0 修了其中 16 个，剩下两个：
+  - `scan_appositive.py` 只列名词短语构成的尾巴，“, with no change over time” 这类尾巴要靠自己读出来；
+  - 改完后再跑一次扫描，它列出的是这一节现在有的框架，分不出哪些是这次改动带进来的。把每次的输出存下来对比。
 - **文件里的 “parent”。** 这套做法最早是为实证金融论文写作手工搭的一对 skill。那一对不在本仓库里，工厂运行也不依赖它们。文件里说的 “parent” 指的就是它们，它们的数字只作为示意出现。
 
 ## 仓库结构
@@ -425,6 +424,6 @@ docs/images/                README 用到的截图
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.3.1（2026-10-14）。
+MIT，见 [LICENSE](LICENSE)。版本 1.4.0（2026-10-14）。
 
 作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

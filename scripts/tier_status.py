@@ -7,10 +7,6 @@ references/provenance.md (the parent build's measured pass counts), scaled by
 the STYLE-SAFE sample size (the papers the model passes actually read), not
 the raw file count.
 
-FACTORY FIXES 2026-10-07: tagging was forecast at one pass PER PAPER while
-SKILL.md and the tagging prompt dispatch ~10 papers per agent (a 10x
-overstatement); `--dest` without a path raised IndexError.
-
 RUN
     py -3 scripts/tier_status.py <field-slug> [--dest <skills-dir>]
 """
@@ -21,14 +17,9 @@ import os
 import re
 import sys
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 HERE = os.path.dirname(os.path.abspath(__file__))
-SKILL = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-import _factory as F  # noqa: E402  (slug, ~ expansion, launcher name)
+import _factory as F  # noqa: E402  (paths, cost models, launcher)
 
 TIER_DESC = {
     0: ("corpus + manifest", "scripts only, minutes"),
@@ -43,14 +34,10 @@ TIER_DESC = {
 }
 
 
-# Tokens processed (millions) and wall-clock hours per tier, measured from the
-# transcripts of a health-policy build (51 style-safe papers, 2026-10-07):
-# subagent runs per tier (Tier 2 21M, Tier 3 PASS-1 79M + PASS-2 172M, Tier 4
-# 44M) plus the coordinating main session (172M), shared out in proportion.
-# About 96% of it was prompt-cache reads. Scaled linearly by style-safe papers.
-REF_PAPERS = 51
-TOKENS_M = {2: 32.4, 3: 387.6, 4: 68.0}
-HOURS = {2: 0.7, 3: 7.9, 4: 1.4}
+# the measured token and hour model (see _factory.TOKEN_MODEL for its source)
+REF_PAPERS = F.TOKEN_MODEL["papers"]
+TOKENS_M = F.TOKEN_MODEL["tokens_m"]
+HOURS = F.TOKEN_MODEL["hours"]
 
 def load_reg(path):
     try:
@@ -97,7 +84,7 @@ def style_safe_count(lit):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("field")
-    ap.add_argument("--dest", default=os.path.dirname(SKILL))
+    ap.add_argument("--dest", default=F.DEFAULT_DEST)
     args = ap.parse_args()
     args.field, args.dest = F.norm_field(args.field), F.user_path(args.dest)
     lit = os.path.join(args.dest, args.field + "-lit")
@@ -120,11 +107,12 @@ def main():
 
     # parent cost model (provenance.md): 60-paper sample -> 8 A2 passes,
     # ~27 PASS1, one PASS2 per chapter, tagging ~10 papers per agent.
-    scale = max(n, 1) / 60.0
-    costs = {"a2": max(4, round(8 * scale)),
-             "p1": max(4, round(27 * scale)),
+    pm = F.PASS_MODEL
+    scale = max(n, 1) / float(pm["papers"])
+    costs = {"a2": max(pm["a2_min"], round(pm["a2"] * scale)),
+             "p1": max(pm["pass1_min"], round(pm["pass1"] * scale)),
              "p2": "one per chapter (taxonomy decides)",
-             "ex": max(1, math.ceil(n / 10)) if n else "?"}
+             "ex": max(1, math.ceil(n / float(pm["tag_per_agent"]))) if n else "?"}
 
     print("field: %s   corpus: %d txt (%d style-safe)   built tiers: %s\n"
           % (args.field, n_files, n, sorted(tiers) or "none"))

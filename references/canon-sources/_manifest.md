@@ -1,6 +1,8 @@
-# canon-sources/_manifest.md -- the writing canon, fetched to disk
+# canon-sources/_manifest.md -- the economics parent's writing guides (the original build's set)
 
-> Fetched 2026-08-26 for /draft-section's structure-canon distillation.
+> Collected by hand 2026-08-26 for the parent's structure canon. A new field
+> collects its own guides and runs scripts/canon_ingest.py (it writes the
+> field's own folder and manifest); this list shows the kind of text to look for.
 > RULE: every non-secondary rule in structure-canon.md must quote one of
 > these files by <key>.txt:line, verbatim -- the canon is greppable, the
 > same paste-not-recall discipline the skill's own attribution guard runs.
@@ -9,8 +11,9 @@
 > NOT DISTRIBUTED: the texts are copyrighted and are not part of this repository.
 > The table below is the set used for the original empirical economics and finance
 > build. For another field, collect writing guides for that field (see the README,
-> "Writing guides for Tier 4"), save each as UTF-8 text named <key>.txt in this
-> folder (or in the folder set as canon_dir), and list it in this table.
+> "Writing guides for Tier 4"); `canon_ingest.py` saves each as UTF-8 text named
+> <key>.txt in the folder set as canon_dir (by default the `-draft` skill's own
+> `references/canon-sources/`) and lists it in that folder's `_manifest.md`.
 > Tier 4's check_drift reads them.
 
 | key | source | words | integrity |
@@ -33,10 +36,10 @@
 | `thomson1999` | Thomson, 'The Young Person's Guide to Writing Economic Theory', JEL 37(1) 1999 | 17,247 | complete |
 | `varian1997` | Varian, 'How to Build an Economic Model in Your Spare Time' | 6,336 | complete |
 
-## Fetch failures (recorded, not retried silently)
+## Not collected (recorded)
 
-- **Shapiro, 'How to Give an Applied Micro Talk' (slides)** -- scholar.harvard.edu 403, no mirror found. Structure content marginal next to foursteps; dropped.
-- **Books (Schimel *Writing Science*, Booth *Craft of Research*, Chaubey *Little Book*)** -- not fetched by design: in-copyright, no lawful full text. Their rules enter structure-canon.md marked `secondary` and never ground a hard rule.
+- **Shapiro, 'How to Give an Applied Micro Talk' (slides)** -- not available (scholar.harvard.edu returned 403), no mirror found. Structure content marginal next to foursteps; dropped.
+- **Books (Schimel *Writing Science*, Booth *Craft of Research*, Chaubey *Little Book*)** -- not collected by design: in copyright, no lawful full text. Their rules enter structure-canon.md marked `secondary` and never ground a hard rule.
 
 ## URLs (verbatim)
 

@@ -1,5 +1,54 @@
 # Changelog — corpus-bootstrap
 
+- **2026-10-14 (1.4.0)** — the rest of the review, the polish workflow's
+  first-run problems, and parent text kept apart.
+  **Polish:** steps run a → b → e → c → d → d2 → f → g, with each step's edits
+  written before the next step reads the file and a re-check after f; counts.py
+  takes its baseline at step a; the sweep's FOCUS reports how well the corpus
+  covers the section, splits one-off frames into core and compositional, and
+  no longer counts citations as words or reads "OR 0.41" as "or";
+  cohesion_loop prints every join; opener_check counts repeated first-three-word
+  lead-ins; sent_diff and trial_diff split a section without page comments by
+  cited study, and trial_diff flags numbers that moved between studies;
+  source_term_check and pdf_ctx try abbreviations both ways; compile.py says why
+  it chose its engine (`--dry-run`) and lists citations split across pages; rep
+  writes a session log; rule 2's fallbacks, the lit budget inside polish, a
+  literature-review section's chapter, the missing comparator, the source's
+  verb, `--batch` and the record's corpus scopes are written down.
+  **-lit:** attest.py rates a multi-word phrase found only through other forms
+  of its last word THIN, not ATTESTED.
+  **Parent text:** kept worked examples sit in PARENT-EXAMPLE blocks or carry a
+  "parent" label; text a tier replaces sits in PARENT-BLOCK tier=N, now with
+  markers on their own lines and outside tables; lit and draft check_drift check
+  that markers pair and that no PARENT-BLOCK survives its tier; the self-test
+  checks that no parent name or number is left unlabelled in the templates.
+  **Configuration:** canon_dir is the field's own `<draft>/references/canon-sources`
+  from the start; `equation_layer` is declared; job definitions are the `jobs:`
+  item comments; onboarding with `--notes` writes `notes-index.md`; Tier 3
+  checks the structure-norms layers; `--map` paths are read from the CSV's
+  folder and `--map` cannot be combined with `--src`.
+  **Code:** one key function, one place for the cost models, no module-level
+  state in stamp.py, every file closed, internal dated notes removed.
+  **Measured rerun** of the polish workflow on the same section (one agent,
+  batch mode): 114 tool calls, 36.5 min, 32.0 million tokens processed (98.3%
+  cache reads); numbers, cite keys and counts unchanged, 0 LaTeX warnings. Of
+  the 23 problems the first run found, 20 were solved and 3 only in part; its
+  18 new findings were fixed here except two left as known limits (", with …"
+  tails in scan_appositive, frames an edit added in the rule-4 re-run):
+  note_terms takes the page written before a quote (`p.6："…"`); pdf_ctx and
+  source_term_check print each context's PDF page; a paragraph that opens
+  without a citation starts its own sent_diff block; the coverage line always
+  says OK or LOW and counts cited papers missing from the corpus; the session
+  log names the pairs file; rule 2 caps the source-wording exemption at about
+  six words (longer stretches are quoted or rebuilt, as lit's lifted-phrasing
+  rule asks), keeps the author's wording when no attested phrase has the same
+  sense, and gives an uncited sentence its paragraph's sources; rule 1 says
+  which additions are fixes; step c keeps "the authors" with the source's verb
+  instead of adding `\citet`; step f asks for section G findings, not
+  humanizer's embedded mode; steps are written in run order; lit's rule 8, the
+  cohesion norm cell, attest.py's exit code and split citations outside the
+  section are explained.
+  Self-test: 135 checks unchanged, 35 added.
 - **2026-10-14 (1.3.1)** — fixes from a full review of the published copy.
   Citations: one shared pattern for natbib and biblatex commands (`\parencite`,
   `\textcite`, `\autocite`, `\footcite`, capitalised forms; not `\nocite`).

@@ -30,7 +30,7 @@
 # opener_max_lead_words: 4  # opener_check: words before the first comma that count as a connective
 # cohesion_section:         # cohesion_loop norm cell; default = the lit field-config intro_job
 # notes_dir:                # reading notes (one <KEY>.md per paper); default = the onboarding --notes folder
-# notes_pdf_field: 对应PDF   # the note field that holds the paper's PDF path
+# notes_pdf_field: pdf   # the note field that holds the paper's PDF path (pdf, PDF, file and 对应PDF always work)
 # library_index: .polish/library-index.json
 # snapshot_dir: .polish/snapshots
 # compile_engine: auto      # pdflatex | xelatex | lualatex

@@ -65,15 +65,35 @@ if os.path.exists(sk_path):
     sk = read(sk_path)
     _TOKEN = "{{" + "FIELD" + "}}"   # concatenated so stamping can't eat it
     check("no unstamped field tokens in SKILL.md", _TOKEN not in sk)
-    # 2026-10-07: the template wraps the parent's chapters, denominators,
-    # paragraph statistics and verb ladder in PARENT-BLOCK tier=N markers. A
-    # block still present at a built tier means this instance is quoting
-    # economics' numbers as its own (a mathematics instance shipped "all nine" chapters under
-    # a twelve-job table and the parent's verb ladder this way).
-    stale = sorted(int(n) for n in re.findall(r"<!-- PARENT-BLOCK tier=(\d)",
-                                               sk) if int(n) in TIERS)
-    check("no PARENT-BLOCK left for a built tier", not stale,
-          "tiers %s still carry parent text" % stale if stale else "")
+
+
+def parent_markers(paths):
+    """(stale tiers, unbalanced files). The template wraps the parent's
+    chapters, denominators, paragraph statistics and verb ladder in
+    PARENT-BLOCK tier=N markers, and its kept worked examples in
+    PARENT-EXAMPLE. A PARENT-BLOCK still present at a built tier means the
+    instance is quoting the parent's numbers as its own."""
+    stale, bad = set(), []
+    for path in paths:
+        text = read(path)
+        stale |= {int(n) for n in re.findall(r"<!-- PARENT-BLOCK tier=(\d) -->", text)} & TIERS
+        depth = 0
+        for m in re.finditer(r"<!-- (/?)PARENT-(?:BLOCK(?: tier=\d)?|EXAMPLE) -->", text):
+            depth += -1 if m.group(1) else 1
+            if depth not in (0, 1):
+                break
+        if depth != 0:
+            bad.append(os.path.basename(path))
+    return sorted(stale), bad
+
+
+_pm = [p for p in [sk_path] + sorted(os.path.join(REF, f) for f in os.listdir(REF)
+                                      if f.endswith(".md") and not f.endswith(".parent.md"))
+       if os.path.exists(p)]
+stale, unbalanced = parent_markers(_pm)
+check("no PARENT-BLOCK left for a built tier", not stale,
+      "tiers %s still carry parent text" % stale if stale else "")
+check("PARENT-BLOCK / PARENT-EXAMPLE markers paired", not unbalanced, ", ".join(unbalanced))
 
 # ---- Tier 2: chapter map ---------------------------------------------------
 if 2 in TIERS:
@@ -148,29 +168,20 @@ if 3 in TIERS:
     total_v = 0
     total_f = 0
     bad_fields, thin = [], []
-    # FACTORY: two ways this regex was wrong for a stamped instance.
-    # (1) [A-Za-z] first: the parent's keys are AuthorYear, so a leading letter was
-    #     safe; an instance whose keys are numbered (07_GengQP2022) matched NOTHING,
-    #     and every Version in such a chapter read "attested by <2 papers".
-    # (2) A paper contributing several sections to one chapter is attributed
-    #     "— Key §6 ¶1", a shape the parent never produced. Both must match.
-    # (3) BACK-PORTED 2026-10-07 from a mathematics instance (2026-09-08): a chapter may number
-    #     entries in a SECOND series -- `Tn` for set-off statements, `Sn` for
-    #     abstract sentences. Without `T` every such Version read "<2 papers".
-    # (4) 2026-10-07: keys may contain '-' (AGENCY-2019); the class stopped at
-    #     the hyphen, so the key never reached the ¶ that the regex requires.
+    # An attesting paper is "— <key>" followed by ¶, S<n>, T<n> or "(", with an
+    # optional "§6" between. Keys may start with a digit (07_GengQP2022) and
+    # contain '-' (AGENCY-2019); T<n> numbers set-off statements, S<n> abstract
+    # sentences.
     key_re = re.compile(r"—\s+([A-Za-z0-9][A-Za-z0-9_\-]+)"
                         r"(?:\s+§[^¶]*)?\s*(?:¶|S\d|T\d|\()")
     FIELDS = REG["sections"]["fields"]
     for ch, meta in REG["sections"]["chapters"].items():
         d = os.path.join(SEC, ch)
-        # FACTORY: a chapter may be deliberately not drafted -- a field can have a
-        # job whose paragraphs are not prose at all.  In this instance `proof` and
-        # `machinery` are chains of displayed equations: the records exist, the
-        # slices exist, and there is no paragraph shape to induce.  That must be a
-        # DECLARATION in the registry, never a tolerated failure, so a chapter with
-        # sections_built:false is asserted ABSENT and a directory appearing there
-        # later fails the check.
+        # A chapter may be deliberately not drafted: a job whose paragraphs are
+        # not prose (chains of displayed equations, say) has records and slices
+        # but no paragraph shape to induce. That is a DECLARATION in the registry
+        # (sections_built: false), never a tolerated failure: such a chapter is
+        # asserted ABSENT, and a directory appearing there later fails.
         if meta.get("sections_built") is False:
             check("sections/%s declared not-drafted, and absent" % ch,
                   not os.path.isdir(d),
@@ -201,9 +212,8 @@ if 3 in TIERS:
               meta.get("versions") is not None and count == meta["versions"],
               "found %d%s" % (count, "" if meta.get("versions") is not None
                               else "; registry count not recorded"))
-        # BACK-PORTED 2026-10-07 from a mathematics instance (2026-09-08): the PASS2 size rule
-        # keeps a chapter under 25 KB as a single <chapter>.md, so only a SPLIT
-        # chapter must carry a skeleton.
+        # The PASS2 size rule keeps a chapter under 25 KB as a single
+        # <chapter>.md, so only a SPLIT chapter must carry a skeleton.
         single = [f for f in files if f == "%s.md" % ch]
         if len(files) == 1 and single:
             check("%s is single-file (under the 25 KB split rule)" % ch,
@@ -220,8 +230,8 @@ if 3 in TIERS:
     check("every Version attested by >=%d papers"
           % REG["sections"]["min_attesting_papers"], not thin,
           "; ".join(thin[:3]))
-    # 2026-10-07: the Example quotes themselves, not just their count -- a
-    # paraphrased or invented example passed every check above.
+    # The Example quotes themselves, not just their count: a paraphrased or
+    # invented example passes every check above.
     import subprocess
     vv = subprocess.run([sys.executable, os.path.join(SKILL, "pipeline", "verify_versions.py")],
                         capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -232,24 +242,30 @@ if 3 in TIERS:
           bool(REG["uniformity_gate"].get("paragraphs") and REG["uniformity_gate"].get("triples")
                and REG["uniformity_gate"].get("pairs")),
           "uniformity_gate paragraphs/triples/pairs (py -3 pipeline/recount.py)")
+    # the structure norms the canon and the router typing appendices quote
+    sn_path = os.path.join(REF, "structure-norms.json")
+    layers = (REG.get("structure_norms") or {}).get("layers") or []
+    try:
+        with open(sn_path, encoding="utf-8") as fh:
+            norms = json.load(fh)
+    except (OSError, ValueError):
+        norms = {}
+    check("structure-norms.json carries every layer (measure_structure.py)",
+          bool(layers) and all(l in norms for l in layers),
+          "missing: %s" % [l for l in layers if l not in norms] if norms
+          else "no references/structure-norms.json -- py -3 scripts/measure_structure.py")
 
 # ---- Tier 4: writing canon --------------------------------------------------
-# FACTORY GAP CLOSED 2026-08-29: SKILL.md cites structure-canon.md as the
-# authority behind several drafting gates (Q3, Q5/Q6, Q7, D5, D7), and the
-# template shipped neither the file nor any assertion about it -- so every
-# stamped instance cited an authority that did not exist.  The canon SOURCES
-# are field-invariant published guides and live once, at factory level; the
-# canon FILE is per-instance, because every rule's corpus status must be
-# re-measured.  Both are asserted here.
+# SKILL.md cites structure-canon.md as the authority behind several drafting
+# gates (Q3, Q5/Q6, Q7, D5, D7). The canon SOURCES (the writing guides) are
+# wherever field-config's canon_dir points -- canon_ingest.py puts a field's
+# own guides in references/canon-sources; the canon FILE is per instance,
+# because every rule's corpus status must be re-measured. Both are asserted.
 if 4 in TIERS:
     print("")
     print("tier 4 (writing canon)")
     sc = os.path.join(REF, "structure-canon.md")
     check("structure-canon.md exists", os.path.exists(sc))
-    # FACTORY FIX 2026-10-07: was SKILL/../corpus-bootstrap/..., which only
-    # exists when the instance is stamped next to the factory; `--dest`
-    # instances failed Tier 4 by construction. stamp.py now writes the
-    # absolute canon_dir into field-config.yaml.
     sys.path.insert(0, os.path.join(SKILL, "pipeline"))
     import _jobs
     canon = _jobs.canon_dir()
@@ -260,9 +276,8 @@ if 4 in TIERS:
               n_txt == cs.get("count")
               and os.path.exists(os.path.join(canon, "_manifest.md")),
               "found %d" % n_txt)
-        # A quotation whose pointer has rotted is worse than no quotation:
-        # building this instance found FIVE such pointers in the parent's own
-        # canon file, one of them aimed at a blank line.
+        # A quotation whose pointer has rotted is worse than no quotation (the
+        # parent's own canon once carried five, one aimed at a blank line).
         sq = cs.get("spot_quotes") or {}
         bad = [f for f, q in sq.items()
                if not (os.path.exists(os.path.join(canon, f))
@@ -271,10 +286,11 @@ if 4 in TIERS:
         check("canon spot-quotes greppable verbatim", not bad and len(sq) >= need,
               "missing in: " + ", ".join(bad) if bad else "%d spot quotes (need %d)" % (len(sq), need))
     else:
-        check("canon-sources reachable at the factory path", False, canon)
+        check("canon-sources reachable at canon_dir", False,
+              "%s -- py -3 <corpus-bootstrap>/scripts/canon_ingest.py <field> --src <guides>" % canon)
     if os.path.exists(sc):
         t = read(sc)
-        check("canon file points at the shared source store",
+        check("canon file cites canon-sources",
               "canon-sources" in t)
         # An instance that inherited the parent's verdicts wholesale would have
         # no TO-MEASURE tags at all; that is the signature to catch.
@@ -291,13 +307,9 @@ if 4 in TIERS:
                   % (len(bad), len(res["quotes"])) if bad else "%d quotes" % len(res["quotes"]))
 
 # ---- Tier 4: verb ladder ---------------------------------------------------
-# FACTORY GAP CLOSED 2026-08-29: the parent asserts its verb-ladder counts and
-# that the ladder's recompute command is a script rather than a hand grep, but
-# no tier-4 block was carried into the template -- so a stamped instance could
-# ship a ladder inherited wholesale from the parent's field and nothing would
-# fail.  In a mathematics corpus the parent's headline phrase (`consistent
-# with`, 996 hits there) occurs ZERO times; an unasserted ladder is not a
-# small drift.
+# The verb ladder must be this field's, generated by a script: a ladder
+# inherited from the parent can be badly wrong elsewhere (the parent's
+# headline phrase `consistent with` occurs zero times in a mathematics corpus).
 if 4 in TIERS:
     print("")
     print("tier 4 (verb ladder)")

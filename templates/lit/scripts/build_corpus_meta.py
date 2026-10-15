@@ -53,7 +53,7 @@ import textseg  # noqa: E402  (interleave_ratio)
 
 # The manuscript, consulted only to decide which member of a byte-identical
 # alias group should be the canonical one.  See pick_canonical below.
-# FACTORY FIX 2026-10-07: was hardcoded to the parent's
+# was hardcoded to the parent's
 # ../../../<manuscript>/main.tex (a path that existed on the parent's
 # machine, so the wrong manuscript was read silently). Now field-config's
 # manuscript_tex, absolute or relative to the project root; empty = none.
@@ -242,7 +242,7 @@ def pick_canonical(keys, cited):
 def classify(m, src=None):
     """Return the primary extraction verdict.  Order matters.
 
-    FACTORY FIX 2026-10-07: scans were labelled "clean" -- every damage test
+    scans were labelled "clean" -- every damage test
     needs words, and an image-only PDF yields almost none, so it fell through
     to the default and entered the style sample. Ingest's SCAN flag (words per
     page) and a near-empty text are now verdicts of their own."""

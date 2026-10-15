@@ -10,7 +10,8 @@ WHY THIS EXISTS
     script does is a consequence of that:
 
       * strips BOM / zero-width characters at every section boundary;
-      * refuses to merge if two shards claim the same PaperKey;
+      * merges a PaperKey that several shards carry (a later shard may
+        supplement an earlier one) but refuses the same sentence twice;
       * refuses to merge if a quoted sentence is not found in its own corpus
         file (a shard read from a stale or wrong file looks perfectly
         well-formed -- same lesson as pipeline/verify_shards.py at Tier 3);
@@ -81,10 +82,9 @@ def main():
             if h:
                 cur = h.group(1)
                 # A section appearing in two shards is a MERGE, not a
-                # conflict: a later shard may supplement an earlier one (the
-                # first mathematics-instance run needed a second pass for openers, whose
-                # sentences run into a displayed equation and needed the
-                # marked-omission convention).  What must never happen is the
+                # conflict: a later shard may supplement an earlier one (a
+                # second pass for openers whose sentences run into a
+                # displayed equation, say).  What must never happen is the
                 # same SENTENCE arriving twice, and that is checked below --
                 # a stronger guard than owner-exclusivity, which would have
                 # forbidden the legitimate case while missing the real one.
@@ -208,7 +208,8 @@ def main():
         for _m, _s, _k, line in rows:
             L.append(line)
         L.append("")
-    io.open(OUT, "w", encoding="utf-8", newline="\n").write("\n".join(L))
+    with io.open(OUT, "w", encoding="utf-8", newline="\n") as _fh:
+        _fh.write("\n".join(L))
     print("\nwrote %s (%d KB)" % (OUT, os.path.getsize(OUT) // 1024))
     print("now record in registry.json: exemplars.sections = %d, "
           "exemplars.tagged_sentences = %d" % (len(sections), total))

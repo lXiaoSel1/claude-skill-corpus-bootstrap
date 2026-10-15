@@ -246,7 +246,8 @@ for k in sorted(cand):
     L.append("")
 
 p = os.path.join(OUTDIR, "chapter-map.md")
-open(p, 'w', encoding='utf-8').write("\n".join(L))
+with open(p, 'w', encoding='utf-8') as _fh:
+    _fh.write("\n".join(L))
 print(f"agree {agree} disagree {disagree} | unassigned {len(unassigned)} | dupes {dupes}")
 print(f"wrote {p} ({os.path.getsize(p)//1024} KB)")
 for j, pp, h in gate:

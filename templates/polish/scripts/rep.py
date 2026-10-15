@@ -22,6 +22,6 @@ if len(ctx.args) != 2:
     _rp.die(__doc__)
 target, pairs = ctx.args
 pairs = _rep.parse(_rp.read(pairs), multi=False)[None]
-job = _rep.Job(ctx)
+job = _rep.Job(ctx, pairs_file=ctx.args[1])
 job.add(target, pairs)
 sys.exit(job.commit())

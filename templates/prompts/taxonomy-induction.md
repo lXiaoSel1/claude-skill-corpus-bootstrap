@@ -47,7 +47,10 @@ Rules — the same discipline the parent build used:
 
 ## After the agent returns
 
-The factory presents the table to the user. On approval, the job list, the
-positional anchors and their definitions are written into
-`field-config.yaml` (`jobs:` block) — the single source the pipeline scripts
-read. Nothing in Tier 2 steps ②–④ runs before that write.
+The factory presents the table to the user. On approval, the job list and the
+positional anchors are written into BOTH field-config copies (`-lit` and
+`-draft`), each job with its one-line definition as the item's comment
+(`  - methods   # how the data were collected and the analysis run`; the
+factory's `Field.set_list("jobs", [(job, definition), …])` writes exactly
+this). `jobs:` is the single source the pipeline scripts read. Nothing in
+Tier 2 steps ②–④ runs before that write.

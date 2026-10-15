@@ -48,7 +48,7 @@
 Scholars ASSERT an established mechanism; they do not re-derive it with connective glue.
 
 **Every rule below carries its measurement.** Counts are from `register-measurements.md`
-(149 style-safe papers, 2,308,511 words); rerun `py -3 scripts/measure_register.py` to reproduce
+(the parent's: 149 style-safe papers, 2,308,511 words, until Tier 1 measures this field); rerun `py -3 scripts/measure_register.py` to reproduce
 any figure. A rule with no count is a rule nobody can check, and this section used to be all
 of those.
 
@@ -56,6 +56,9 @@ of those.
 Make the mechanism or incentive the **SUBJECT**, use **one PLAIN verb**, and let the
 **citation** carry the "why." "Plain" ≠ "strong/vivid." The corpus verbs are dry and
 repetitive, and the counts are why we call them the register:
+
+<!-- PARENT-EXAMPLE -->
+> *Parent example (economics/finance): the shape is the lesson; the names and numbers are not this field's. This field's counts: `register-measurements.md` (Tier 1).*
 
 `increases` **133 papers** · `reduces` 94 · `affects` 82 · `holds` 71 · `limits` 59 ·
 `creates` 51 · `raises` 47 · `lowers` 26 · `induces` 22
@@ -66,6 +69,8 @@ repetitive, and the counts are why we call them the register:
 - ✅ "a corporation can increase its current market value by increasing the risk of the assets in the fund." [Sharpe1976]
 - ✅ "The system of required contributions creates an incentive to limit risk taking in pension plans." [Rauh2009]
 - ✅ "underpriced pension insurance induces greater risk-taking on the part of the firm." [LoveSmithWilcox2011]
+
+<!-- /PARENT-EXAMPLE -->
 
 ### R2 · Personifying verbs — JUDGMENT, never asserted as a defect
 Any verb that personifies or metaphorises a mechanism, policy or quantity is worth
@@ -78,12 +83,13 @@ nouns. Sampled: `court` has **zero verb uses** in 149 papers — every hit is "b
 **courts**"; `load` is "**loading** and unloading of property on aircraft" and
 "front-**loaded** plans"; `tilt` is "**tilted** toward bonds" and "inverse probability
 **tilting**", an estimator; `reward` is the noun in "risks and **rewards**". This is the
-same failure `draft-section/references/verb-ladder.md` recorded for `(in)?consistent with`,
+same failure the parent's verb ladder recorded for `(in)?consistent with` (this field's:
+`../{{FIELD}}-draft/references/verb-ladder.md`, Tier 4),
 where a pattern swallowed the negation and the statistic measured its own opposite.
 
 So: **raise it as a question, with evidence attached.** Run
-`py -3 scripts/attest.py "<verb>"` and read the concordance. Test per verb — would Rauh2009 or
-AnHuangZhang2013 use this exact verb in this slot? Absent as a verb → offer a R1 whitelist
+`py -3 scripts/attest.py "<verb>"` and read the concordance. Test per verb — would this field's
+anchor papers (the parent asked: Rauh2009 or AnHuangZhang2013?) use this exact verb in this slot? Absent as a verb → offer a R1 whitelist
 verb. Present as a technical term → leave it alone.
 
 Only one candidate survived measurement as a genuine absence: **`adjudicate`, 0 hits in 149
@@ -222,7 +228,8 @@ tune them, and recorded why.
 
 ## 7. Out of scope for this skill
 Numbers, claims, and whether a cited paper supports what the passage attributes to it are **not** reviewed
-here. Those belong to `/verify-claims` (attribution) and the author (numbers → the manuscript's `main.tex`).
+here. Those belong to a claim-verification skill such as `/verify-claims` (attribution; optional) and the
+author (numbers → the manuscript, `manuscript_tex`).
 Attribution errors are the ones that sink a paper; say so in the output footer, but do not try to check them
 from a style pass.
 
@@ -299,8 +306,8 @@ tell. Never recommend adding connectives to raise a number.
   demonstrative with no antecedent is canon K9 (`naked-demonstrative`), Cochrane's
   "'This' should always have something following it".
 - **Two-sided theory contrasts take parallel openers**: "Under risk shifting, … . Under
-  risk management, … ." (canon K6 `parallel-item`; attested Bodie, Rauh2009, Treynor,
-  HsiehChenFerris).
+  risk management, … ." (canon K6 `parallel-item`; parent example, attested Bodie, Rauh2009,
+  Treynor, HsiehChenFerris).
 - **Vary structure, never terminology** (canon D4). Don't cycle
   `However → Nevertheless → Yet` for variety's sake — elegant variation is the defect,
   repetition is the carrier (McCloskey §17/§19).

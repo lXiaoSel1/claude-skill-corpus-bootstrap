@@ -3,9 +3,8 @@
 ~600 characters of prose that follow it -> pipeline/a1_windows.md.
 
 taxonomy-induction.md rule 2 requires the inducer to read prose windows, not
-heading strings; this builds exactly that input. BACK-PORTED 2026-10-07 from
-a mathematics -draft instance (it was created there 2026-09-07 and never reached the
-template), with the sample size computed instead of the hardcoded "45".
+heading strings; this builds exactly that input (sample size computed
+from the sample).
 
     py -3 pipeline/build_windows.py
 """

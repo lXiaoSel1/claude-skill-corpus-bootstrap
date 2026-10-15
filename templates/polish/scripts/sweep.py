@@ -8,9 +8,16 @@ Does not rely on a reviewer choosing what to query. Layers:
                     attested (each in >= sweep_common_df papers) but whose
                     combination is in 0 corpus papers
   L2b one-offs   -- 3-4-grams used once whose words are all very common (each
-                    in >= sweep_very_common_df papers), combination in 0 papers
+                    in >= sweep_very_common_df papers), combination in 0 papers;
+                    "core" when a word pair inside is itself in 0 papers (read
+                    these), "compositional" when every pair is attested
+                    (usually ordinary grammar; only the first 20 print)
   L3  length     -- sentences longer than the corpus words-per-sentence P90
-FOCUS lists what falls inside the named sections: the step's to-do list.
+                    (citations are not words, as in para_lengths.py)
+Frames never run across a citation or a statistic label ("OR 0.41").
+FOCUS lists what falls inside the named sections: the step's to-do list, and
+how well the corpus covers the section (cited papers in the style corpus,
+the section's key words in >= 3 papers; LOW = rule 2 often cannot be met).
 POSITIVE CONTROLS are phrases a reviewer knows should be flagged; each is
 tested against the corpus index itself, so it is judged whether or not the
 draft still contains it. A MISSED control means the sweep is not qualified.
@@ -24,7 +31,7 @@ import sys
 from collections import Counter, defaultdict
 
 import _rp
-from _rp import toks, strip_line, HEADING_LINE
+from _rp import toks, gram_toks, prose_words, strip_line, HEADING_LINE
 
 ctx = _rp.Ctx(sys.argv)
 opts = ctx.opts
@@ -69,9 +76,9 @@ sents = [s.strip() for s in split_sentences(re.sub(r"\s+", " ", prose)) if len(s
 draft_words = Counter()
 draft_grams = {n: Counter() for n in (2, 3, 4)}
 for s in sents:
-    t = toks(s)
-    for w in t:
+    for w in toks(s):
         draft_words[w] += 1
+    t = gram_toks(s)
     for n in (2, 3, 4):
         for g in grams(t, n):
             if "citex" not in g.split():
@@ -129,15 +136,24 @@ for d, n, g in sorted(one, key=lambda r: (-r[1], -r[0])):
     if n == 3 and any((" " + g + " ") in (" " + g4 + " ") for _, n4, g4 in one_f if n4 == 4):
         continue
     one_f.append((d, n, g))
+
+
+def is_core(g):
+    """A one-off frame with a word pair the corpus never uses is worth reading;
+    one whose every pair is attested is usually compositional grammar."""
+    return any(not gram_df[2].get(b) for b in grams(g.split(), 2))
+
+
+core_n = sum(1 for _, _, g in one_f if is_core(g))
 print("\nL2b ONE-OFF FRAMES — very common words (each >= %d papers), combination in 0 papers: %d"
-      % (VERY_COMMON, len(one_f)))
-for d, n, g in sorted(one_f, key=lambda r: -r[0])[:60]:
-    print("  min-df %2d  %s" % (d, g))
+      " (%d core, %d compositional)" % (VERY_COMMON, len(one_f), core_n, len(one_f) - core_n))
+for d, n, g in sorted(one_f, key=lambda r: (not is_core(r[2]), -r[0]))[:60]:
+    print("  %-4s min-df %2d  %s" % ("core" if is_core(g) else "", d, g))
 
 # L3
-long_s = [s for s in sents if len(toks(s)) > P90]
+long_s = [s for s in sents if prose_words(s) > P90]
 print("\nL3 LENGTH — sentences over corpus P90 (%d words): %d of %d" % (P90, len(long_s), len(sents)))
-dw = sorted(len(toks(s)) for s in sents)
+dw = sorted(prose_words(s) for s in sents)
 if dw:
     print("  draft words/sentence median %d, P90 %d" % (dw[len(dw) // 2], dw[int(0.9 * len(dw))]))
 
@@ -146,7 +162,7 @@ if dw:
 def present(fs, gram_set):
     hits, where = Counter(), defaultdict(list)
     for ln, s in fs:
-        t = toks(s)
+        t = gram_toks(s)
         for n in (4, 3, 2):
             for g in grams(t, n):
                 if g in gram_set:
@@ -160,33 +176,68 @@ def present(fs, gram_set):
     return kept, hits, where
 
 
+def coverage(sec, fs):
+    """How well the style corpus covers this section's topic."""
+    idx = ctx.library_index()
+    keys = sorted(_rp.cite_keys(sec.text()))
+    style = set(papers)
+    in_style = [k for k in keys if ((idx.get(k) or {}).get("corpus_key") or k) in style]
+    widespread = {w for w, _ in sorted(word_df.items(), key=lambda x: -len(x[1]))[:300]}
+    cw = Counter(w for _, s in fs for w in toks(s)
+                 if len(w) >= 4 and w not in ("citex", "num") and w not in widespread)
+    top = [w for w, _ in cw.most_common(15)]
+    dfs = sorted(len(word_df.get(w, ())) for w in top)
+    good = sum(1 for d in dfs if d >= 3)
+    # LOW: under half the key words are in >= 3 papers, or the corpus holds
+    # none of the section's three or more cited papers (their topic's
+    # reporting frames are then rarely attested)
+    why = []
+    if top and good * 2 < len(top):
+        why.append("key words")
+    if len(keys) >= 3 and not in_style:
+        why.append("cited papers")
+    print("  coverage %s: cited papers in the style corpus %d of %d; key words in >= 3 papers %d of %d"
+          " (median df %s of %d)%s"
+          % ("LOW" if why else "OK", len(in_style), len(keys), good, len(top),
+             dfs[len(dfs) // 2] if dfs else "-", len(papers),
+             "  LOW (%s): rule 2 will often not be met; record it (rule 2c)" % " and ".join(why) if why else ""))
+
+
 recurring = {g for c, n, g in flagged}
 oneoff = {g for _, n, g in one_f}
 for sec in focus:
     fs = _rp.para_sentences(_rp.section_body(sec), split_sentences)
-    wc = sorted(len(toks(s)) for _, s in fs)
+    wc = sorted(prose_words(s) for _, s in fs)
     print("\n" + "=" * 70)
     if not wc:
         print("FOCUS %s: 0 sentences" % sec.key)
         continue
     print("FOCUS %s (%s): %d sentences · words/sentence median %d · over P90 (%d): %d"
           % (sec.key, sec.path, len(fs), wc[len(wc) // 2], P90, sum(1 for x in wc if x > P90)))
+    coverage(sec, fs)
     kept, hits, where = present(fs, recurring)
     print("  recurring 0-hit frames present (L2): %d" % len(kept))
     for g in kept:
         print("    %d×  %s   (doc-wide ×%d; lines %s)"
               % (hits[g], g, draft_grams[len(g.split())][g], where[g]))
     kept, hits, where = present(fs, oneoff)
-    print("  one-off 0-hit frames present (L2b): %d" % len(kept))
-    for g in kept:
-        print("    %s   (lines %s)" % (g, where[g]))
+    core = [g for g in kept if is_core(g)]
+    comp = [g for g in kept if not is_core(g)]
+    print("  one-off 0-hit frames present (L2b): %d — core %d (read each), compositional %d"
+          % (len(kept), len(core), len(comp)))
+    for g in core:
+        print("    core  %s   (lines %s)" % (g, where[g]))
+    for g in comp[:20]:
+        print("          %s   (lines %s)" % (g, where[g]))
+    if len(comp) > 20:
+        print("          ... %d more compositional frames (ordinary grammar unless idiomatic)" % (len(comp) - 20))
     vv = Counter(w for _, s in fs for w in toks(s) if w not in ("citex", "num")
                  and len(word_df.get(w, ())) <= 2 and len(w) >= 3)
     print("  vocabulary at 0-2 corpus papers: " + ", ".join(
         "%s×%d(df%d)" % (w, c, len(word_df.get(w, ()))) for w, c in vv.most_common()))
     print("  sentences over P90:")
     for ln, s in fs:
-        n = len(toks(s))
+        n = prose_words(s)
         if n > P90:
             print("    L%d %dw  %s…" % (ln, n, s[:90]))
 

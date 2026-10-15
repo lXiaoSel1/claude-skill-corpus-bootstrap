@@ -8,7 +8,9 @@
 The expected values come from polish.yaml (expected_cited_keys,
 expected_page_comments, expected_bibitems) when set; otherwise the first
 run records a baseline in .polish/counts-baseline.json and later runs
-compare against it (--rebaseline replaces it).
+compare against it (--rebaseline replaces it). Run it first at step a,
+before any edit, so the baseline is the unedited manuscript. A baseline taken
+before the first compile has no bibitems; that count is then not compared.
 
 RUN
     py -3 scripts/counts.py [--rebaseline]
@@ -71,7 +73,11 @@ if not exp:
 print("\nexpected (%s):" % src)
 for k in now:
     if k in exp:
-        ok = now[k] == exp[k] or (k == "bibitems" and not bbl_keys)
+        if k == "bibitems" and (not bbl_keys or not exp[k]):
+            print("  %-14s %4d  expect %4s  n/a (%s)" % (k, now[k], exp[k] or "-",
+                  "no .bbl now" if not bbl_keys else "no .bbl when the baseline was taken"))
+            continue
+        ok = now[k] == exp[k]
         fail += not ok
         print("  %-14s %4d  expect %4d  %s" % (k, now[k], exp[k], "OK" if ok else "DIFF"))
 sys.exit(1 if fail else 0)

@@ -43,7 +43,7 @@
    Backward"): announce, *as soon as possible*, how the new sentence connects
    backward. McCloskey §17 states the same schema as **(AB)(BC)(CD)** —
    "transitive writing" — against the failure form (ABZYX)(MNOP), which is
-   "probably nonsense". `corpus: TO-MEASURE (parent-econ verdict: MEASURED (57,271 pairs))` — the join-grade
+   "probably nonsense". `corpus: TO-MEASURE (parent-econ verdict: MEASURED (57,271 pairs))` — the parent's join-grade
    histogram: STRONG 20.9% · GOOD 27.3% · ACCEPTABLE 36.0% · WEAK 2.4% ·
    BROKEN 13.4%. So **86.6% of corpus joins carry a mechanically visible
    carrier** — the rule describes real practice — but BROKEN is a minority,
@@ -58,7 +58,7 @@
    (a) lexical repetition or a derived form; (b) a relation-signalling
    transitional phrase; (c) a pronoun or summary noun phrase. A pure overlap
    metric false-negatives on (b) — which is why every JOINS row records
-   *which* carrier it found. `corpus: TO-MEASURE (parent-econ verdict: confirmed)` — 17.3% of corpus pairs open
+   *which* carrier it found. `corpus: TO-MEASURE (parent-econ verdict: confirmed)` — in the parent, 17.3% of corpus pairs open
    with a connective, and those are real joins.
 
 3. **Repetition is the carrier, not a defect.** McCloskey: "you *must* repeat
@@ -96,7 +96,7 @@ grade in every JOINS row.
 STRONG = antecedent in S₁'s stress zone · GOOD = anywhere in S₁ · ACCEPTABLE
 = elsewhere in the paragraph · WEAK = earlier in the document · BROKEN? =
 nowhere. **Do not fail an ACCEPTABLE join for not being STRONG.**
-`corpus: TO-MEASURE (parent-econ verdict: confirmed, and the strict version refuted)` — only **46.8%** of
+`corpus: TO-MEASURE (parent-econ verdict: confirmed, and the strict version refuted)` — in the parent, only **46.8%** of
 backward topic links come from the previous stress zone (D1 below).
 
 **K3 · The link must arrive early** [P]
@@ -165,7 +165,7 @@ on the suspect synonym)`.
 Topic-to-topic recurrence that ignores every stress position, in a
 chain-shaped paragraph = Schimel's "list of ideas that don't flow". **Gated
 by K15**: in a TS-D paragraph, hub-linking to S₁ is correct.
-`corpus: TO-MEASURE (parent-econ verdict: gate confirmed necessary)` — finance Results paragraphs are
+`corpus: TO-MEASURE (parent-econ verdict: gate confirmed necessary)` — the parent's finance Results paragraphs are
 predominantly TS-D-shaped; ungated K11 would mass-flag them.
 
 **K12 · No preview, no recall** [P]
@@ -219,7 +219,7 @@ a paragraph of disconnected sentences is exactly an enumeration.**
 highest-overlap non-adjacent pair and its shared stems; the review MUST read
 that pair and answer: same argument restated, or legitimate term recurrence?
 Lexical overlap cannot tell these apart in a register where repeating terms
-is the norm (§1.3) — only reading can. **Measured on the motivating case:**
+is the norm (§1.3) — only reading can. **Measured on the parent's motivating case:**
 the redundant pair (S1↔S6, sharing state-level/panel/counties/risk) sat at
 P23 — *typical* overlap for a conclusion paragraph — so percentile alone
 would never flag it. The slot exists because the number cannot.
@@ -233,7 +233,7 @@ and metaphor set at join 1 hold through the paragraph; verdict `frame-break`.
 ## §4 Canon disagreements, adjudicated by the corpus (D1–D6)
 
 **D1 · Strict stress→topic vs any-prior antecedent.**
-Schimel demands the chain; Wilke/G&S/Williams allow any prior. **Corpus:
+Schimel demands the chain; Wilke/G&S/Williams allow any prior. **Parent corpus:
 46.8% of backward topic links come from the previous stress zone.** The
 strict rule would flag the majority of real joins in this literature →
 Schimel's version `refuted` as a requirement, kept as the STRONG grade.
@@ -245,11 +245,12 @@ question that is structure-conditional; the gate is the adjudication.
 **D3 · Connectives: "when in doubt, connect" (Pinker) vs "clanking
 machinery" (McCloskey).**
 They answer different questions — recoverability vs substitution. Merged
-rule = K7 + K8. **Corpus: 17.3% of joins open with a connective, and 82.1%
+rule = K7 + K8. **Parent corpus: 17.3% of joins open with a connective, and 82.1%
 of those also carry a lexical link.** So this literature uses connectives
 sparingly and almost always *on top of* a carrier — McCloskey describes the
 practice, Pinker describes the floor. Word-list bans stay refuted
-(`Moreover` 26 papers, `not only…but also` 47 — register-measurements.md).
+(parent: sentence-initial `Moreover,` 92 papers, `not only…but also` 47; this field's in
+register-measurements.md).
 
 **D4 · Repetition vs variation.** Vary *structure*, never *terminology*.
 `corpus: TO-MEASURE (parent-econ verdict: confirmed)` (§1.3). Bonus: this is what makes overlap a valid metric

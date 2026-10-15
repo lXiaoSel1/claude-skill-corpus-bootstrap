@@ -7,8 +7,8 @@ PASS/FAIL per line, exit 0 only if clean.  TIER-AWARE: sections gate on
 registry.built_tiers, so an instance at Tier 1 is judged as a Tier-1 instance,
 not failed for lacking Tier-4 artifacts.
 
-FACTORY FIXES 2026-10-07 -- the 2026-08 version reported 36/36 PASS on
-a mathematics -lit instance while three corpus defects were live:
+Rules learned from a version that reported 36/36 PASS while three corpus
+defects were live:
   * a registry value still null at a BUILT tier is a FAIL (it used to skip
     the check silently, which is a pass that measured nothing);
   * Tier 0 asserts no SCAN/ERROR-flagged or near-empty text is style-safe,
@@ -96,6 +96,26 @@ check("no unstamped field tokens outside registry",
           for f in ("register.md", "terms.md", "candidates.md",
                     "cohesion-canon.md", "field-config.yaml")
           if os.path.exists(os.path.join(REF, f))))
+# Parent text: a PARENT-BLOCK tier=N must be rewritten from this field's own
+# measurements once tier N is built; PARENT-EXAMPLE blocks are kept worked
+# examples. Markers must pair. (*.parent.md are tier1_fill's unfilled copies.)
+_pm = [os.path.join(SKILL, "SKILL.md")] + sorted(
+    os.path.join(REF, f) for f in os.listdir(REF) if f.endswith(".md") and not f.endswith(".parent.md"))
+_stale, _unpaired = set(), []
+for _p in [p for p in _pm if os.path.exists(p)]:
+    _t = read(_p)
+    _stale |= {int(n) for n in re.findall(r"<!-- PARENT-BLOCK tier=(\d) -->", _t)} & TIERS
+    _d = 0
+    for _m in re.finditer(r"<!-- (/?)PARENT-(?:BLOCK(?: tier=\d)?|EXAMPLE) -->", _t):
+        _d += -1 if _m.group(1) else 1
+        if _d not in (0, 1):
+            break
+    if _d != 0:
+        _unpaired.append(os.path.basename(_p))
+check("no PARENT-BLOCK left for a built tier", not _stale,
+      "tiers %s still carry parent text" % sorted(_stale) if _stale else "",
+      "rewrite those blocks from this field's measurements and delete their markers")
+check("PARENT-BLOCK / PARENT-EXAMPLE markers paired", not _unpaired, ", ".join(_unpaired))
 cfg_path = os.path.join(REF, "field-config.yaml")
 del cp.WARNINGS[:]
 cfg = cp.parse(cfg_path)

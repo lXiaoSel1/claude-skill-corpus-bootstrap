@@ -82,14 +82,16 @@ say(True, "humanizer section G", hz if hz_g else "use references/humanizer-G.md 
 
 print("\nsteps")
 t0, t1, t2, t3 = 0 in lt, 1 in lt, 2 in dt, 3 in dt
+# in the order they run: e's source checks come before c, and every step that
+# changes text writes it (rep.py) before the next step reads the file
 steps = [
-    ("a", "snapshot.py", bool(ms), ""),
+    ("a", "snapshot.py + counts.py (baseline)", bool(ms), ""),
     ("b", "sweep.py", bool(ms) and t0, "" if t0 else "lit Tier 0"),
-    ("c", "rewrite + attest.py", t0, "" if t0 else "lit Tier 0"),
-    ("d", "/%s-lit + cohesion_loop.py" % _rp.FIELD, t1, "" if t1 else "lit Tier 1"),
-    ("d2", "opener_check.py", t3, "" if t3 else "draft Tier 3 (records)"),
     ("e", "source_term_check / pdf_ctx", bool(ms) and (has_fitz or t0), ""),
     ("e", "note_terms.py", bool(ms) and bool(ms and (ctx.opts["notes_dir"] or ctx.library_index_meta().get("notes_dir"))), "reading notes"),
+    ("c", "rewrite + attest.py, then rep.py", t0, "" if t0 else "lit Tier 0"),
+    ("d", "/%s-lit + cohesion_loop.py" % _rp.FIELD, t1, "" if t1 else "lit Tier 1"),
+    ("d2", "opener_check.py", t3, "" if t3 else "draft Tier 3 (records)"),
     ("f", "humanizer section G", True, ""),
     ("g", "trial_diff / para_lengths / scan_appositive", bool(ms) and t0, "" if t0 else "lit Tier 0"),
     ("g", "words_compare.py (optional)", t2, "" if t2 else "draft Tier 2 (slices)"),

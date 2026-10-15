@@ -28,14 +28,14 @@ THE FRICTION VALVE
     "never straight into the corpus or patterns" -- a cache that auto-promotes
     drifts, and a drifting cache is worse than no cache because it is trusted.
 
-FACTORY FIXES 2026-10-07
+Behaviour
     * promote moves rows: promoted blocks leave candidates.md (backup kept),
       so a second `promote --all` no longer duplicates them in terms.md;
     * promote is partial: ready rows go in, BLOCKED and STALE rows are listed
-      and stay behind (the mathematics instance's 166 unreviewed rows blocked 600+ good ones);
+      and stay behind (166 unreviewed rows once blocked 600+ good ones);
     * STALE rows -- recorded against a different corpus denominator than the
       current corpus_meta -- are flagged by `list` and refreshed with
-      `add --refresh` (156 rows of a mathematics instance still said range:x/27 at 50 papers);
+      `add --refresh` (156 rows once still said range:x/27 at 50 papers);
     * cite-keys may start with a digit or contain '-' (P08, 01_PaperX1993,
       AGENCY-2019); the survival check protects them too;
     * REFERENCE-ONLY verdicts (attest.py) route to Section B like THIN.

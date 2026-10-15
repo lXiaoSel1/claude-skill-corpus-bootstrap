@@ -13,7 +13,8 @@ corpus mapping. Input file: `a2_wave{k}.md` — for each paper, every candidate
 heading with its level, pattern flags, verbatim text, and `FOLLOWS:` (the
 ~600 characters of prose after it).
 
-The approved job taxonomy for this field (from field-config.yaml):
+The approved job taxonomy for this field (the `jobs:` items of field-config.yaml;
+each item's comment is its definition):
 
 {jobs table: job | functional definition}
 

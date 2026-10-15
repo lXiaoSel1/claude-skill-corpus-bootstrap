@@ -24,7 +24,7 @@ onboard.py --finish.
 
 RUN
     py -3 scripts/onboard.py --manuscript <main.tex> --library <folder or .bib> [--library ...]
-        [--notes <folder>] [--notes-pdf-field 对应PDF] [--field <slug> --keywords "..."]
+        [--notes <folder>] [--notes-pdf-field pdf] [--field <slug> --keywords "..."]
         [--citation-style author-year|numeric|mixed] [--dest <skills dir>]
         [--include-uncited] [--dry-run]
     py -3 scripts/onboard.py --finish --field <slug> [--manuscript <main.tex>] [--dest <skills dir>]
@@ -301,7 +301,7 @@ def contains_seq(hay, needle):
 # ---- notes ------------------------------------------------------------------------
 def scan_notes(notes_dir, field):
     out = {}
-    pat = re.compile(r"^\s*(?:%s|pdf|PDF|file)\s*[:：]\s*(.+?)\s*$" % re.escape(field), re.M)
+    pat = re.compile(r"^\s*(?:%s|pdf|PDF|file|对应PDF)\s*[:：]\s*(.+?)\s*$" % re.escape(field), re.M)
     for root, _, files in os.walk(notes_dir):
         for f in files:
             if not f.endswith(".md"):
@@ -386,7 +386,7 @@ def corpus_keys(keys):
     (NTFS and macOS file names are case-insensitive)."""
     out, taken = {}, set()
     for k in sorted(keys):
-        c = re.sub(r"[^A-Za-z0-9_\-]+", "_", k).strip("_-") or "key"
+        c = F.safe_key(k, "_") or "key"
         if not c[0].isalnum():
             c = "k" + c
         base, n = c, 2
@@ -403,10 +403,10 @@ def main():
     ap.add_argument("--manuscript")
     ap.add_argument("--library", action="append", default=[])
     ap.add_argument("--notes")
-    ap.add_argument("--notes-pdf-field", default="对应PDF")
+    ap.add_argument("--notes-pdf-field", default="pdf")
     ap.add_argument("--field")
     ap.add_argument("--keywords", default="")
-    ap.add_argument("--citation-style", default="author-year", choices=["author-year", "numeric", "mixed"])
+    ap.add_argument("--citation-style", default="author-year", choices=F.STYLES)
     ap.add_argument("--dest")
     ap.add_argument("--include-uncited", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
@@ -527,7 +527,7 @@ def main():
         for r in pdfs:
             if r["path"] in used:
                 continue
-            c = re.sub(r"[^A-Za-z0-9_\-]+", "_", os.path.splitext(os.path.basename(r["path"]))[0]).strip("_-")
+            c = F.safe_key(os.path.splitext(os.path.basename(r["path"]))[0], "_")
             c = c if c and c[0].isalnum() else "doc_" + r["md5"][:8]
             while c.lower() in taken:
                 c += "_x"
@@ -549,9 +549,31 @@ def main():
     F.run([sys.executable, "-B", os.path.join(F.HERE, "ingest.py"), fld.lit, "--map", cmap])
     print("manifest:")
     fld.run("lit", "build_corpus_meta.py")
+    if notes:
+        write_notes_index(fld, idx)
     print("\nNEXT: %s %s %s%s   (Tier 0 acceptance, default decisions)"
           % (F.PY, os.path.join(F.HERE, "tier0_accept.py"), fld.field, F.dest_arg(a.dest)))
     return 0
+
+
+def write_notes_index(fld, idx):
+    """<field>-draft/references/notes-index.md: the draft skill's step 2b map
+    from a cited key to its reading note (and its corpus text)."""
+    rows = sorted((k, r) for k, r in idx.items() if r.get("note_file"))
+    none = sorted(k for k, r in idx.items() if not r.get("note_file"))
+    L = ["# notes-index.md -- cite key -> reading note (written by onboard.py %s)" % F.TODAY, "",
+         "> The -draft skill's step 2b: paste source lines from the note, else from",
+         "> `../%s-lit/references/corpus/<corpus key>.txt`. Re-run onboarding to rebuild." % fld.field,
+         "", "## A. Keys with a reading note", "",
+         "| cite key | corpus key | note |", "|---|---|---|"]
+    L += ["| `%s` | `%s` | %s |" % (k, r.get("corpus_key", k), r["note_file"].replace("\\", "/"))
+          for k, r in rows]
+    L += ["", "## B. Cited keys with no reading note", "",
+          ", ".join("`%s`" % k for k in none) if none else "(none)", ""]
+    p = os.path.join(fld.draft, "references", "notes-index.md")
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(L))
+    print("notes index: %s (%d with a note, %d without)" % (p, len(rows), len(none)))
 
 
 def report(idx, pdfs, keys):

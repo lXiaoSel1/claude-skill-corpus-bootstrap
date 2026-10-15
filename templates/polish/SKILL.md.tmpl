@@ -2,8 +2,8 @@
 name: {{FIELD}}-polish
 description: "Revise an ENGLISH manuscript on {{FIELD_KEYWORDS}} one section at a time against the {{FIELD}} literature, the way a careful co-author would. A whole-manuscript register sweep, frame and opener checks, sentence cohesion, rare words checked against the cited papers' own PDFs, a meaning pass (one reading per sentence), mechanical diffs that prove numbers, citations and source comments did not move, a sentence-by-sentence check of every changed claim against its source, then compile and render. Works on the user's own main.tex (sections come from its \\input files or headings); no configuration file. Use when user says \"逐节改写我的{{FIELD}}英文稿\", \"按文献改这一节\", \"用语料库把这节改一遍\", \"polish this section against the literature\", \"run the section workflow on <section>\". Calls /{{FIELD}}-lit for register and terms. NOT a drafting tool (/{{FIELD}}-draft), NOT a translator, NOT for Chinese prose."
 author: Xuan Tang
-version: 1.0.0
-argument-hint: "<section key> [--manuscript main.tex]"
+version: 1.1.0
+argument-hint: "<section key> [--manuscript main.tex] [--batch]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Skill"]
 ---
@@ -55,11 +55,25 @@ A step whose tier is missing is skipped and named in the record, never faked.
    if its PDF or the reading note says it. Nothing the reader could infer is
    added. The verb keeps the source's strength: `suggest` is not `find`,
    `related to` is not `attributable to`, `billed to` is not `paid by`.
+   A fix adds words only from the source and only of two kinds: the
+   comparator the source states (§31), and a qualifier the snapshot had that
+   an edit dropped (lesson 2). A reason (§29), a scope or a finding the author
+   did not write goes under "left to the author" in the record.
 2. **Wording comes from the corpus.** A frame or phrase of our own is used only
    if `{{FIELD}}-lit`'s `attest.py --scope style` finds it in **≥3 papers**, and
    the concordance shows the same sense. A term the cited paper itself uses
    (a variable, a method, a category, an institution) is exempt, but only once
-   step e has found it in that paper.
+   step e has found it in that paper; a sentence that cites nothing (a topic
+   sentence) takes its paragraph's cited papers as its sources. Three more
+   cases: (a) the cited paper's own wording for a result, found in its PDF
+   with `pdf_ctx.py`, is exempt like a term up to about six words; a longer
+   stretch is quoted with its page or rebuilt from attested parts, because
+   copying it unquoted is the lifted phrasing that `{{FIELD}}-lit`'s register
+   §2 flags; (b) two attested frames may be joined, and the junction is
+   checked in h2, not by attest; (c) when no attested phrase has the same
+   sense, keep the author's wording and record which rule-2 check it fails,
+   under "left to the author", instead of forcing a substitute. The sweep's
+   FOCUS coverage line says how often to expect (c): LOW means often.
 3. **Length.** No sentence over the corpus words-per-sentence P90 (the sweep
    prints it; citations not counted); no paragraph over 9 sentences; never 3
    consecutive paragraphs with the same sentence count (the rule runs across
@@ -79,17 +93,28 @@ A step whose tier is missing is skipped and named in the record, never faked.
    `.polish/rep-backup/`.
 8. **Show the first sections to the user.** Render (step j) and wait for the
    user on the first one or two sections; continue in a batch only when the
-   user says so.
+   user says so. When the request says batch or non-interactive (`--batch`),
+   render, record and go on without waiting.
 
 ## Steps a–j for one section
 
-### a · Snapshot
+**Order.** The letters name the steps; run them in this order:
+a → b → e → c → d → d2 → f → g → h2 → i → j. Step e comes before c because
+c needs e's verdict on every source term. Each step that changes the text
+writes its edits with `rep.py` before the next step reads the file
+(cohesion_loop.py and opener_check.py read the manuscript, not your draft):
+c's edits before d, d's and d2's before f, f's before g. After f, run
+`sweep.py` and `cohesion_loop.py` once more (rule 4).
+
+### a · Snapshot and baseline counts
 
 ```
 py -3 scripts/snapshot.py <name> <section>        # e.g. before-intro intro
+py -3 scripts/counts.py                            # first run: the baseline, before any edit
 ```
-g and h2 compare against it. A snapshot name is never overwritten (`--force`
-to replace on purpose).
+g and h2 compare against the snapshot. A snapshot name is never overwritten
+(`--force` to replace on purpose). counts.py records its baseline on the
+first run, so run it here; on later sections it must print OK.
 
 ### b · Whole-manuscript sweep
 
@@ -101,47 +126,19 @@ has to guess what to look up: L1 words in 0 corpus papers, L1b words in 1–2,
 L2 recurring 2–4-word frames whose words are common but whose combination is
 in 0 papers, L2b one-off frames of very common words in 0 papers, L3
 sentences over the corpus P90. **FOCUS** lists what falls in this section:
-the to-do list for c, d2 and e. **POSITIVE CONTROLS** are phrases that must be
+the to-do list for e, c and d2, and a coverage line that says OK or LOW (how
+many cited papers are in the style corpus, how many of the section's key
+words are in ≥3 papers). LOW, when under half the key words pass or the
+corpus holds none of three or more cited papers, means rule 2(c) will be
+needed often. L2b is long; act only on its
+**core** frames (a word pair inside is in 0 papers) and on idioms, stance or
+evaluative frames, or frames that make a claim the source must license
+("largely point to"). A compositional frame ("are more likely than")
+passes. **POSITIVE CONTROLS** are phrases that must be
 flagged (polish.yaml `sweep_controls`; put there the phrases your own drafts
 once got past a reviewer). Each is tested against the corpus itself: CAUGHT,
 PARTIAL (only flagged when used twice) or MISSED. A MISSED control means the
 sweep is not qualified (exit 1).
-
-### c · Split long sentences, replace frames
-
-By hand. Long sentence → a design sentence (data, sample, method) and a result
-sentence. "The authors argue / note / state" → `\citet{X}` + the source's verb.
-Comparisons name both sides ("women had higher odds than men of …"). Every
-new frame, and every replacement, is attested first:
-```
-py -3 <{{FIELD}}-lit>/scripts/attest.py --scope style "candidate one" "candidate two"
-```
-Read the concordance, not only the count. 0–2 papers: do not use it.
-
-### d · `/{{FIELD}}-lit` and cohesion
-
-Call the `{{FIELD}}-lit` skill (Skill tool) on the section's paragraphs: style
-only, citations and numbers untouched; list the frames already attested this
-session so they are not looked up twice. Its TERMS and REGISTER blocks print
-every row. For a section with several paragraphs:
-```
-py -3 scripts/cohesion_loop.py <section>
-```
-prints each join's grade, the WEAK/BROKEN joins, the percentile tails and the
-M8 pair. Adjudicate each BROKEN?: a topic sentence followed by the first study
-is a normal TS-D shape; an abbreviation the script cannot resolve is fine; a
-real gap gets a lexical carrier, never a pile of connectives (R11).
-
-### d2 · Paragraph openers
-
-```
-py -3 scripts/opener_check.py <section>
-```
-Covers two blind spots of b: frames found in 1–2 papers, and opening frames
-used only once. Each paragraph opener and sentence-initial connective is
-counted among the corpus's paragraph openers. Attest each opener frame;
-replacements come first from a `{{FIELD}}-draft` Version that has a verbatim
-example. Content adverbials ("In Ontario,", "For cancer,") are not frames.
 
 ### e · Every rare word and every domain term gets a verdict
 
@@ -155,21 +152,99 @@ a written verdict. A word is either
    py -3 scripts/note_terms.py KEY1,KEY2 "regex"          # quotes in the reading notes, with pages
    ```
    (ligatures restored, words split at a line end re-joined, hyphen / space /
-   nothing between words, inflected endings; NO PDF TEXT says when a paper
-   has no text to search); or
+   nothing between words, inflected endings, abbreviations defined in the
+   manuscript or the paper tried both ways and shown as "+N via ABBR=…"; NO
+   PDF TEXT says when a paper has no text to search). pdf_ctx.py and
+   source_term_check.py print each context's page, p.N counting the PDF
+   file's pages from 1; note_terms.py prints the page the note gives; or
 2. **our own wording** — replaced by an attested phrase whose concordance has
    the same sense ("concerned" in 3 papers all meaning *worried* does not
    license "concerned" meaning *involved*).
 
+### c · Split long sentences, replace frames
+
+By hand, after step e. Before replacing a 0–2-paper word or a domain term,
+check e's verdict: a word the cited paper uses is a source term (rule 2's
+exemption), not a frame to replace. Long sentence → a design sentence (data,
+sample, method) and a result sentence. "The authors argue / note / state" →
+keep the subject and give it the source's verb: argue or suggest for the
+source's interpretation, found or concluded for a claim the source states in
+its own voice (its Results or its Conclusion). Attest the verb frame ("find
+that", "argue that"); the subject ("the authors", "they") is not part of
+it. Putting `\citet{X}` in place of "the authors" repeats a citation the
+paragraph already has; do it only if the user allows new citation commands.
+Comparisons name both sides ("women had higher odds than men of …"); if the
+source does not state the comparator, do not supply one: leave it to the
+author and say so in the record. Every new frame, and every replacement, is
+attested first:
+```
+py -3 <{{FIELD}}-lit>/scripts/attest.py --scope style "candidate one" "candidate two"
+```
+Read the concordance, not only the count. 0–2 papers: do not use it
+(attest.py exits 1 when any term in the call is NOT ATTESTED: a verdict, not
+a failed run). A
+phrase that attest.py found **only** through the suffix family (it says
+"matched ONLY via the suffix family") is THIN unless the concordance shows
+the same form and sense, and hits in boilerplate (conflict-of-interest or
+funding statements) do not count. Write c's edits with `rep.py` before d.
+
+### d · `/{{FIELD}}-lit` and cohesion
+
+Call the `{{FIELD}}-lit` skill (Skill tool) on the section's paragraphs: style
+only, citations and numbers untouched; list the frames already attested this
+session so they are not looked up twice. Its TERMS and REGISTER blocks print
+every row. Inside polish, the lit skill's tool-call budget does not apply:
+lesson 1 and step e need a row per term; batch the terms, several per
+`attest.py` call. If the Skill tool does not list `{{FIELD}}-lit`, follow its
+`SKILL.md` steps 1–6 by hand; if the lit skill is read-only, skip its step 7
+(`cache.py`) and list the terms it would cache in the record. The lit skill's
+rule 8 (nothing written until the user says to place it) is met by the
+polish request itself: its changes go into a pairs file that rep.py writes
+after step a's snapshot. For a section with several paragraphs:
+```
+py -3 scripts/cohesion_loop.py <section>
+```
+prints every join (grade, overlap, carriers; WEAK/BROKEN marked `!`), the
+percentile tails and the M8 pair. The norm cell is the lit field-config's
+`intro_job` for every section (polish.yaml `cohesion_section` sets another),
+so a literature review's tails are read against introductions unless you
+set it. Adjudicate each BROKEN?: a topic sentence
+followed by the first study is a normal TS-D shape; an abbreviation the
+script cannot resolve is fine; a real gap gets a lexical carrier, never a
+pile of connectives (R11).
+
+### d2 · Paragraph openers
+
+```
+py -3 scripts/opener_check.py <section>
+```
+Covers two blind spots of b: frames found in 1–2 papers, and opening frames
+used only once. Each paragraph opener and sentence-initial connective is
+counted among the corpus's paragraph openers, and the first three words of
+every sentence are counted too: a lead-in used two or more times in the
+section ("After controlling for …") is listed. Attest each opener frame;
+replacements come first from a `{{FIELD}}-draft` Version that has a verbatim
+example. For a section with no draft chapter of its own (a literature
+review), use the `literature-*` chapter if the draft built one, else the
+introduction part files whose Versions summarise prior studies (the
+chapter's `00-skeleton.md` router names them); record which file you used.
+Content adverbials ("In the first year,", "For the treated group,") are not
+frames.
+
 ### f · Meaning: section G
 
-Call the humanizer skill in embedded mode, "academic text, section G only
-(§27–§32)", or apply `references/humanizer-G.md` when humanizer has no
-section G. Read each sentence with only the previous one in view; two
+Apply section G (§27–§32) as a check that lists findings:
+`references/humanizer-G.md` is the procedure, and the humanizer skill's own
+section G may be used instead if you ask it for findings (its embedded mode
+returns only rewritten text). Each finding goes in the record (§, sentence,
+problem, fix). Read each sentence with only the previous one in view; two
 readings, or more than the source says, fails: scope of each/both/these
 (§27), a verb stronger or other than the source's (§28), a difference with no
 stated reason (§29), a word with two readings (§30), a comparison missing a
-side (§31), a modifier or attribution attached to the wrong phrase (§32).
+side (§31; when the source names no comparator, leave it to the author), a
+modifier or attribution attached to the wrong phrase (§32). A fix that would
+add a reason or a scope is listed for the author (rule 1). Write f's edits
+with `rep.py`, then run `sweep.py` and `cohesion_loop.py` again.
 
 ### g · Mechanical checks
 
@@ -181,27 +256,38 @@ py -3 scripts/words_compare.py                       # optional: sentence length
 ```
 Pass: numbers, cite keys and comments identical to the snapshot; no paragraph
 over 9 sentences; no run of 3 equal counts; no sentence over the P90.
+trial_diff also compares the numbers block by block (one block per page
+comment, or per cited study): MOVED? (a number now sits in another study's
+block) and ORDER? (a block's numbers changed order) do not fail the step, but
+each one is checked in h2.
 
 ### h2 · Every changed claim against its source
 
 ```
 py -3 scripts/sent_diff.py <snapshot> <section>
 ```
-Blocks end at a `% Key p.N` comment, so one block is one source's facts; the
-changed sentences print as `-` / `+`. Check every sentence whose meaning
-moved (a new verb, an added comparison, a qualifier merged, split or dropped,
-a renamed category) against the note or PDF.
+A block is one source's facts: the text up to a `% Key p.N` comment, or,
+without page comments, one cited study (a new block starts where the cited
+keys change, and at a paragraph that opens without a citation). The changed
+sentences print as `-` / `+`. Check every sentence
+whose meaning moved (a new verb, an added comparison, a qualifier merged,
+split or dropped, a renamed category) against the note or PDF.
 
 ### i · Compile and count
 
 ```
 py -3 scripts/compile.py      # engine + bibliography + reruns; 0 warnings is the target
-py -3 scripts/counts.py       # cited keys, page comments, bibitems unchanged
+py -3 scripts/counts.py       # cited keys, page comments, bibitems unchanged since step a
 ```
-counts.py records a baseline on its first run (or reads `expected_*` from
-polish.yaml). Look at the PDF: a citation broken across a page puts its link
-on the page number. Reword first; add `\mbox{}` only if rewording fails, and
-recompile to confirm 0 warnings.
+compile.py says which engine it chose and why (`--dry-run` only prints that):
+polish.yaml, a `% !TEX program` line or a first-line "Compiles with …"
+comment, packages loaded outside an engine test, else pdflatex. It also lists
+citations that a page break splits (one link on two pages), by PDF page, for
+the whole manuscript. Fix the ones in the section you revised: reword first,
+add `\mbox{}` only if rewording fails, and recompile to confirm 0 warnings.
+List the others in the record; they belong to their own sections' passes.
+counts.py compares with the baseline from step a (or `expected_*` in
+polish.yaml).
 
 ### j · Render for the user
 
@@ -217,7 +303,9 @@ Fill `templates/parity_template.md` into `<manuscript dir>/.polish/records/<sect
 metrics before/after, rejected and adopted frames with paper counts, the
 `{{FIELD}}-lit` blocks as returned, the rare-word verdict table with source
 quotes and pages, the section-G findings, the h2 checks, and what is left to
-the author. Append one line per decision to the session log.
+the author. Append one line per decision to the session log,
+`<manuscript dir>/.polish/records/session.log` (rep.py and rep_multi.py
+already add a line for every write).
 
 ## Lessons (each from a real failure)
 
@@ -247,15 +335,19 @@ the author. Append one line per decision to the session log.
 ```
 py -3 scripts/doctor.py
 py -3 scripts/snapshot.py before-<sec> <sec>                       # a
+py -3 scripts/counts.py                                            # a: baseline before any edit
 py -3 scripts/sweep.py <sec>                                       # b
+py -3 scripts/source_term_check.py pairs_<sec>.tsv                 # e: verdicts before c
+py -3 scripts/pdf_ctx.py KEY "term"
 py -3 <lit>/scripts/attest.py --scope style "candidate"            # c, for every new frame
+py -3 scripts/rep.py <sec> pairs/<sec>-c.txt                       # c: write before d reads the file
 #   Skill {{FIELD}}-lit on the section; then
 py -3 scripts/cohesion_loop.py <sec>                               # d
 py -3 scripts/opener_check.py <sec>                                # d2
-py -3 scripts/source_term_check.py pairs_<sec>.tsv                 # e
-py -3 scripts/pdf_ctx.py KEY "term"
-#   Skill humanizer, section G only (or references/humanizer-G.md)   # f
-py -3 scripts/rep.py <sec> pairs/<x>.txt                           # write the edits
+py -3 scripts/rep.py <sec> pairs/<sec>-d.txt                       # d, d2 edits
+#   section G findings: references/humanizer-G.md (or humanizer's G)   # f
+py -3 scripts/rep.py <sec> pairs/<sec>-f.txt                       # f edits
+py -3 scripts/sweep.py <sec> && py -3 scripts/cohesion_loop.py <sec>   # rule 4: re-check
 py -3 scripts/trial_diff.py before-<sec> <sec>                     # g
 py -3 scripts/para_lengths.py <sec>
 py -3 scripts/sent_diff.py before-<sec> <sec>                      # h2
@@ -270,19 +362,19 @@ py -3 scripts/render_section.py <sec>                              # j
 | `doctor.py` | — | environment, siblings, tiers, library index; which steps are ready |
 | `manuscript.py` | — | the manuscript's sections, aliases, bibliography (`py -3 scripts/manuscript.py main.tex`) |
 | `snapshot.py` | a | save sections; `--list` |
-| `sweep.py` | b | whole-manuscript register sweep, FOCUS, positive controls |
-| `cohesion_loop.py` | d | `{{FIELD}}-lit`'s cohesion.py on every paragraph of 3+ sentences |
-| `opener_check.py` | d2 | paragraph openers and leading connectives against corpus openers |
-| `source_term_check.py` | e | (key, term) pairs searched in the cited paper |
+| `sweep.py` | b | whole-manuscript register sweep, FOCUS with coverage, L2b core / compositional, positive controls |
+| `cohesion_loop.py` | d | `{{FIELD}}-lit`'s cohesion.py on every paragraph of 3+ sentences; every join |
+| `opener_check.py` | d2 | paragraph openers, leading connectives and repeated first-three-word frames against corpus openers |
+| `source_term_check.py` | e | (key, term) pairs searched in the cited paper, abbreviations both ways |
 | `pdf_ctx.py` | e / h2 | every context of a regex in one paper |
 | `note_terms.py` | e / h2 | quoted source sentences in reading notes, with pages |
-| `trial_diff.py` | g | numbers, cite keys, comments vs a snapshot |
+| `trial_diff.py` | g | numbers, cite keys, comments vs a snapshot; numbers block by block |
 | `para_lengths.py` | g / i | sentences per paragraph, uniform runs, long sentences |
 | `scan_appositive.py` | g | appositive tails |
 | `words_compare.py` | g | sentence length vs corpus chapter slices (optional) |
-| `sent_diff.py` | h2 | changed sentences per source block |
-| `compile.py` | i | compile the user's main.tex, report warnings and pages |
-| `counts.py` | i | cited keys, page comments, bibitems vs baseline |
+| `sent_diff.py` | h2 | changed sentences per source block (page comment or cited study) |
+| `compile.py` | i | compile the user's main.tex, report warnings, pages and split citations; `--dry-run` shows the engine |
+| `counts.py` | a / i | cited keys, page comments, bibitems vs the step-a baseline |
 | `render_section.py` | j | readable text with printed citation labels |
 | `rep.py` / `rep_multi.py` | all | exact one-occurrence replacements from a pairs file (`templates/pairs_example*.txt`) |
 
@@ -294,8 +386,15 @@ snapshot, a tier missing).
 
 - English only: the splitter, the corpus and the norms are English.
 - cohesion.py grades joins, not percentiles per join, and does not resolve
-  abbreviations (spinal cord injury → SCI reads as BROKEN?).
+  abbreviations (a long name followed by its abbreviation reads as BROKEN?).
 - render_section.py reads natbib author-year labels from the .bbl; numeric
   styles render as their labels.
 - Page comments (`% Key p.N` after each fact) are optional; without them
-  sent_diff.py compares the section as one block and counts.py reports 0.
+  sent_diff.py and trial_diff.py split the section by cited study, and
+  counts.py reports 0 page comments.
+- The split-citation check needs hyperref links in the PDF.
+- scan_appositive.py lists noun-phrase tails only. ", with …" absolutes and
+  participle tails (", covering …") fall under rule 5 too; find them by
+  reading.
+- The rule-4 re-run of sweep.py prints the frames now present, not which ones
+  an edit added: save each run's output and compare the FOCUS lists.

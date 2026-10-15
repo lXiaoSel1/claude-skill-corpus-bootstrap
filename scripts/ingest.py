@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """Tier 0: convert the field's PDFs into an instance's references/corpus/*.txt.
 
-MANUAL-FIRST by design (user decision 2026-08-26): YOU obtain the PDFs --
+MANUAL-FIRST by design: YOU obtain the PDFs --
 institutional access included; this script only converts and QC-checks. No
 fetching, no APIs (see references/fetch-research.md).
 
-Sources (any combination):
-  * <instance>/drop/*.pdf                       (default, as before)
-  * --src DIR [--recursive]                     a library folder, read in place
+Sources, one of:
+  * <instance>/drop/*.pdf                       (default)
+  * --src DIR [--src DIR ...] [--recursive]     library folders, read in place
+                                                (instead of drop/)
   * --map CSV                                   explicit key -> file rows
         columns: key,path[,group][,role][,note]
         path may be a .pdf (converted) or a .txt (copied verbatim, e.g. a
-        publisher-XML body for an entry with no PDF); group/role are free
-        tags carried into the manifest (e.g. group=econ|health|report,
-        role=research|report|abstract_only|scan)
+        publisher-XML body for an entry with no PDF); a relative path is
+        read from the CSV's own folder; group/role are free tags carried
+        into the manifest (e.g. group=econ|health|report,
+        role=research|working|report|abstract_only|scan)
     With --map, ONLY the mapped files are ingested and the map's keys are the
-    corpus keys (so they match your bibliography). Without it, keys come from
-    file stems.
+    corpus keys (so they match your bibliography); --src cannot be added.
+    Without it, keys come from file stems.
 
 Conversion: the pinned `pdftotext` from field-config.yaml, else the first
 pdftotext on PATH, else PyMuPDF. pdftotext runs in -q DEFAULT mode (the
@@ -51,12 +53,8 @@ import shutil
 import subprocess
 import sys
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _factory as F  # noqa: E402  (launcher name for the printed hints)
+import _factory as F  # noqa: E402  (UTF-8 output, launcher name, key rule)
 
 SCAN_WPP = 60       # words per page below this: image-only / scan
 SHORT_WORDS = 1500   # readable but short: abstract-only, slides, brief
@@ -76,7 +74,7 @@ def keyify(path):
     """File stem -> corpus key (letters, digits, _ and -). Non-ASCII stems get
     a stable hash suffix instead of collapsing to 'unnamed'."""
     stem = os.path.splitext(os.path.basename(path))[0]
-    key = re.sub(r"[^A-Za-z0-9_\-]+", "", stem.replace(" ", "_")).strip("_-")
+    key = F.safe_key(stem.replace(" ", "_"), "")
     if not key or len(key) < 3:
         key = (key + "_" if key else "doc_") + hashlib.sha1(
             stem.encode("utf-8")).hexdigest()[:8]
@@ -180,13 +178,18 @@ def collect(inst, args):
     """-> list of dicts {key, path, group, role, note}"""
     items = []
     if args.map:
-        with open(args.map, encoding="utf-8-sig", newline="") as fh:
+        if args.src:
+            sys.exit("give --map or --src, not both (--map ingests only its rows)")
+        cmap = F.user_path(args.map)
+        base = os.path.dirname(cmap)
+        with open(cmap, encoding="utf-8-sig", newline="") as fh:
             for row in csv.DictReader(fh):
                 key = (row.get("key") or "").strip()
                 path = (row.get("path") or "").strip()
                 if not key or not path:
                     continue
-                items.append({"key": key, "path": os.path.abspath(path),
+                path = os.path.expanduser(path)
+                items.append({"key": key, "path": os.path.normpath(os.path.join(base, path)),
                               "group": (row.get("group") or "").strip(),
                               "role": (row.get("role") or "").strip(),
                               "note": (row.get("note") or "").strip()})
@@ -223,7 +226,7 @@ def main():
                          " (use with --force KEY)")
     args = ap.parse_args()
 
-    inst = os.path.abspath(args.instance)
+    inst = F.user_path(args.instance)
     corpus = os.path.join(inst, "references", "corpus")
     manifest_path = os.path.join(inst, "references", "corpus_sources.json")
     if not os.path.isdir(os.path.join(inst, "scripts")):

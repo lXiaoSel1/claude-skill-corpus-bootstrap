@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Attest a term or phrase against this lit instance's corpus.
 
-FACTORY FIXES 2026-10-07 (each was a measured silent under-count):
+Behaviour (each rule guards against a measured silent under-count):
   * straight and curly apostrophes are the same character class -- a typed
     "workers' compensation" never matched the U+2019 most PDFs carry;
   * whitespace inside a phrase matches any whitespace run, so a phrase
@@ -358,6 +358,12 @@ def attest(term, papers, total_words, cap, scope_label, refs=frozenset(),
         verdict = "THIN"
     else:
         verdict = "NOT ATTESTED"
+    # A multi-word phrase found only through other forms of its last word
+    # ("in the reviews" via "in the review") is not this phrase: the papers
+    # use a different wording. THIN, so the concordance gets read.
+    multiword = len([w for w in re.split(r"[-\s]+", term.strip()) if w]) > 1
+    if verdict == "ATTESTED" and not n_exact and related and multiword:
+        verdict = "THIN"
     return {
         "term": term,
         "matched_via": contributed[0].rsplit(" (+", 1)[0] if contributed else None,
@@ -402,7 +408,9 @@ def render(r):
     out.append("  hits by variant: " + "; ".join(r["contributions"]))
     if r.get("via_related_forms"):
         out.append("  matched ONLY via the suffix family (other forms of the"
-                   " lemma) -- the exact form returned zero")
+                   " lemma) -- the exact form returned zero%s"
+                   % ("; a phrase found only this way is THIN: read the concordance"
+                      if len(r["term"].split()) > 1 else ""))
     elif r.get("related_forms_hits"):
         out.append("  related forms (suffix family, not counted above): %d hits,"
                    " %d further papers" % (r["related_forms_hits"],

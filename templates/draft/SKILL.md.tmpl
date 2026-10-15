@@ -16,10 +16,10 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
 > `/corpus-bootstrap` from the economics/finance parent (draft-section). The
 > RULES, the ledger disciplines, the slots and the write contract are the
 > parent's verbatim — field-invariant. **Everything corpus-shaped is tier-gated**:
-> the chapter table below shows the PARENT's nine chapters until Tier 2's
-> approved taxonomy replaces it; Versions/denominators/uniformity numbers fill
-> at Tier 3; the parent's worked examples are illustrations, not this field's
-> facts. `references/registry.json` (built_tiers) says what is live;
+> the chapter table below shows the PARENT's nine chapters until Tier 3 replaces
+> it with this field's chapters (the taxonomy is approved at Tier 2; Versions,
+> denominators and uniformity numbers exist only after Tier 3); the parent's
+> worked examples are illustrations, not this field's facts. `references/registry.json` (built_tiers) says what is live;
 > **before Tier 3 this skill can VALIDATE and TRACE but must refuse to draft**
 > (rule 2 — a Version that does not exist yet cannot be quoted). Manuscript
 > onboarding (evidence-map, notes-index, manuscript-state, "For this
@@ -28,7 +28,9 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
 > **Blocks marked `PARENT-BLOCK tier=N`** carry the economics parent's chapters,
 > denominators, paragraph statistics and verb ladder as illustrations. Each is
 > rewritten from this instance's registry at its tier; `py -3 scripts/check_drift.py`
-> fails while one remains at a built tier. **English only**: the corpus,
+> fails while one remains at a built tier. **Blocks marked `PARENT-EXAMPLE`** are the
+> parent's worked examples kept on purpose: their shape is the lesson, their names
+> and numbers are not this field's. **English only**: the corpus,
 > splitter and checks are English; instructions may be Chinese.
 
 
@@ -36,7 +38,7 @@ You draft ONE paragraph, then stop. Its shape comes from `references/sections/` 
 from real papers in our corpus, not from any external template. Every asserted sentence has a ledger
 row naming its evidence **before** the sentence exists.
 
-**The write contract (v2.0.0, 2026-08-26).** `Write` and `Edit` stay absent from allowed-tools; this
+**The write contract.** `Write` and `Edit` stay absent from allowed-tools; this
 skill never touches `main.tex` — you place the paragraph yourself. `Bash` was re-admitted for exactly
 two purposes, and the guarantee moved from a tool gate to a behavioural contract:
 
@@ -55,7 +57,7 @@ this contract; a run that wrote anywhere else is a broken run, report it. For se
 
 1. **One paragraph per turn.** Draft it, stop, wait.
 2. **Structure is quoted, not invented.** The paragraph's move and version must come from a named Version
-   in a `references/sections/` file (e.g. `03-tension.md · Version 7`); the output reports it and the papers attesting it.
+   in a `references/sections/` file (e.g. `03-<part>.md · Version 7`); the output reports it and the papers attesting it.
 3. **No ledger row, no sentence — and the ledger is validated before prose exists.** Every asserted
    claim gets a row naming its evidence first; the VALIDATE step (workflow 3a) checks the finished
    ledger as a whole before any drafting starts. Evidence missing → **drop the sentence**, do not
@@ -78,7 +80,7 @@ this contract; a run that wrote anywhere else is a broken run, report it. For se
 | # | Step | Calls |
 |---|---|---|
 | 0 | **INTAKE** — target section, ¶ number, what it must say. Map the section to its directory using the table below. Read `references/manuscript-state.md` (which Versions this manuscript already used/rejected; cached source lines) **if it exists** — before manuscript onboarding it does not, and there is simply no prior state to carry | 0–1 (once per session) |
-| 1a | **SKELETON** — read `references/sections/<chapter>/00-skeleton.md` (14–36 KB); its **router** says which part file this paragraph needs, and its typing appendix says how binding each part is. Recommend ONE Version, name one or two alternates — never a menu | 1 (once per chapter) |
+| 1a | **SKELETON** — read `references/sections/<chapter>/00-skeleton.md`; its **router** says which part file this paragraph needs, and its typing appendix says how binding each part is. Recommend ONE Version, name one or two alternates — never a menu | 1 (once per chapter) |
 | 1b | **VERSIONS** — read the **one** part file the router names; pick a Version | 1 |
 | 2a | **EVIDENCE INDEX** — read `references/evidence-map.md` (the cached section/table/figure index). If `py -3 scripts/build_evidence_map.py --check` says STALE, rebuild it first. **Absent before manuscript onboarding**: with no manuscript there is nothing to index, so own-result claims cannot be `SUPPORTED` and the ledger must mark them `ORPHAN` rather than pretend | 0–1 (once per session) |
 | 2b | **NOTES** — one Grep for this ¶'s cite-keys via `references/notes-index.md`; skip keys already in state §C. **Skipped entirely when that file does not exist** — see the attribution guard | 0–1 |
@@ -103,19 +105,18 @@ sentences; that separation is what the uniformity gate protects.
 **Read the skeleton, then exactly one part file — never the whole chapter.** The sections layer is
 split precisely so that drafting one paragraph costs one skeleton plus one part file, not the lot
 (sizes: `registry.json` → `sections`). Each `00-skeleton.md` carries a router: it turns "I am
-writing ¶3 of the Results" into "open `results/02-estimate.md`".
+writing ¶3 of <chapter>" into "open `<chapter>/02-<part>.md`".
 
-Routers differ by chapter because the corpus does. The Introduction's is a **position table** — ¶
-number in, part file out — because its parts run in a measured order. The Results, Robustness and
-Conclusion routers are **Version→file** tables, because those chapters are organised by what a
-paragraph does rather than by where it sits. The Abstract's is a **sentence-position** table. Read
-the skeleton's own §1–§2 and follow what it says.
+Routers differ by chapter because the corpus does. A chapter whose parts run in a measured order
+gets a **position table** (¶ number in, part file out); a chapter organised by what a paragraph
+does rather than by where it sits gets a **Version→file** table; a front block (an abstract) may
+get a **sentence-position** table. Read the skeleton's own §1–§2 and follow what it says.
 
 **That contract dictates where a section lives, and it is not cosmetic.** A part file has to be
 self-sufficient for writing its part, so anything you need *while writing* — the ordering rule, the
 paragraph budget, the which-Version-first split — sits beside the Versions it governs, never in the
-skeleton. Measured on the Introduction: `## The usual order` / `## Where it sits` appears in 6 of the 8
-part files and **zero times** in `00-skeleton.md`; `## Paragraph budget` likewise. The skeleton carries
+skeleton (parent build: `## The usual order` / `## Where it sits` sat in 6 of the Introduction's 8
+part files and never in its `00-skeleton.md`; `## Paragraph budget` likewise). The skeleton carries
 only what is true *across* parts — the arc, the router, the chapter-wide length distribution,
 corpus-wide disagreements, chapter-wide zeros, and `For this manuscript`.
 
@@ -123,7 +124,7 @@ corpus-wide disagreements, chapter-wide zeros, and `For this manuscript`.
 would this section have been needed?* Yes → part file. Only useful when comparing parts → skeleton.
 
 The files that are **never read whole** are `references/records/*.md` — one per chapter, the raw
-paragraph-by-paragraph reading notes, 85–312 KB each. Use the `Grep` tool for `^### <Key>` to get an
+paragraph-by-paragraph reading notes, often hundreds of KB. Use the `Grep` tool for `^### <Key>` to get an
 offset, then read that block. In normal drafting you read them **zero times**; they serve `--outline`
 and evidence re-checks only. They are the evidence layer; `sections/` is what was induced from them.
 
@@ -180,7 +181,7 @@ what you need is genuinely absent from a chapter's Versions, say so and stop —
 **`--outline <section>` — two directions, same test (structure-canon.md Q5/Q6).**
 - *Prospective* (before drafting a section): emit one sentence per **planned** paragraph, each tagged
   with its part and a candidate Version; the sentence string must read as an argument. This is where
-  a long intro's cyclicity gets planned (a re-entry appears as its own line, `tension (2nd pass)`).
+  a long intro's cyclicity gets planned (a re-entry appears as its own line, `<part> (2nd pass)`).
   Calls: 1 (the chapter skeleton).
 - *Retrospective* (a drafted section exists): read the section from `main.tex`, summarize each
   paragraph in one sentence (Thomson's test), report the string plus each paragraph's nearest
@@ -201,8 +202,8 @@ the hand-off costs nothing, running it inline doubles cost and hides the diff.
 
 | 借口 | 现实 |
 |---|---|
-| "用户赶时间,先给段落,引用后补" | 后补的引用就是凭记忆归因——IPW/Siegmann 那类错误的确切生产线。台账先行恰恰在赶时间时最省时:错误归因的返工比台账贵一个量级 |
-| "这条结论显然成立,不用贴源行" | "显然"是记忆的另一个名字。三处词频勘误(verb-ladder errata)全都曾"显然" |
+| "用户赶时间,先给段落,引用后补" | 后补的引用就是凭记忆归因——父本里 IPW/Siegmann 那类错误的确切生产线。台账先行恰恰在赶时间时最省时:错误归因的返工比台账贵一个量级 |
+| "这条结论显然成立,不用贴源行" | "显然"是记忆的另一个名字。父本的三处词频勘误(verb-ladder errata)全都曾"显然" |
 | "这段很简单,一句话而已,跳过流程" | 简单只缩短台账(可能就一行),不豁免台账。中途发现不简单 → 停下,升级,重走 3a |
 
 ## The skeleton is measured, not designed
@@ -223,7 +224,7 @@ rule from the chapter you are writing, not from here.**
 
 **On McCloskey's objection.** *Economical Writing* tells authors to "spurn the received outline" —
 and a corpus-induced Versions system is, by construction, a received outline
-(`../corpus-bootstrap/references/canon-sources/mccloskey1985.txt:854-856`; adjudicated as `structure-canon.md` D7). The answer this
+(the parent quoted McCloskey 1985 for this; adjudicated as `structure-canon.md` D7). The answer this
 skill commits to: the layer is **descriptive** (what 60 published papers did, with counts), never
 prescriptive (306 Versions per slot is the opposite of one template), and the uniformity gate exists
 precisely to stop corpus conformity from producing uniform prose. The navigate-don't-retrieve
@@ -262,12 +263,12 @@ inside the introduction.
 
 The older 8 move labels (`opener · stakes · theory-tension · mechanism-claim · methods · results ·
 contribution · gap`) survive only in `records/_superseded/` and are shared with
-`../{{FIELD}}-lit/references/exemplars.md`'s 3,266 sentences, so a grep there still returns sentence-level
+`../{{FIELD}}-lit/references/exemplars.md` (built at Tier 4), so a grep there returns sentence-level
 evidence. **They are not the vocabulary of the nine chapter references** — those name the jobs each
 chapter actually does, induced after reading, not before.
 <!-- /PARENT-BLOCK -->
 
-## Attribution guard — the mechanised form of this project's worst lesson
+## Attribution guard — the mechanised form of the parent project's worst lesson
 
 Every `\citet`/`\citep` gets a ledger row **before** its sentence exists:
 
@@ -276,29 +277,30 @@ cite-key | verb | claim as I will write it | SOURCE LINE verbatim (file:line) | 
 ```
 
 The `warrant` cell answers Booth's missing question: **why does THIS evidence license THIS claim** —
-"coefficient significant" does not warrant "managers deliberately de-risk"; a warrant names the
+"coefficient significant" does not warrant "managers deliberately de-risk" (parent example); a warrant names the
 bridge or admits there is none (`structure-canon.md` Q3). It is a ⚠ cell, never a gate: an empty
 warrant survives, flagged, into `LEAVE TO AUTHOR`.
 
 1. **No row, no citation.**
 2. **The source line is pasted, not recalled.** Two sources, in order of preference:
-   a hand-written note under `literature_notes/`, located via `references/notes-index.md`; or,
-   failing that, `../{{FIELD}}-lit/references/corpus/<key>.txt` directly. Cannot paste it → drop the sentence.
-   **This instance has no notes layer yet** — `references/notes-index.md` does not exist, so every
-   source line comes from the corpus file, and there is no §B no-note list to consult. That is the
-   normal state before manuscript onboarding, not a defect; the guard is unweakened, because the
-   corpus file is the stronger source of the two in any case.
+   a reading note from the onboarding `--notes` folder, located via `references/notes-index.md`
+   (onboarding writes it when notes are given); or, failing that,
+   `../{{FIELD}}-lit/references/corpus/<key>.txt` directly. Cannot paste it → drop the sentence.
+   **Without reading notes** `references/notes-index.md` does not exist, so every source line comes
+   from the corpus file, and there is no §B no-note list to consult. That is a normal state, not a
+   defect; the guard is unweakened, because the corpus file is the stronger source of the two.
 3. **Ownership test.** Run over the pasted line: `py -3 scripts/draftcheck.py own "<line>"` — the
    regex follows this field's `citation_style` (author-year, numeric `[12]`, flattened superscripts
    `costs.12,13`, or mixed). A hit means the claim belongs to a third party — re-attribute, or drop
    the verb to `note`. Numeric/superscript markers say nothing about WHOSE claim it is: there the
    hit is a prompt to read the line, and ownership is judgment-first.
-   *This is the shape of the error where a draft turned IoannidouPintoWang2022's report of
-   Siegmann/Dyachenko's non-linearity into IPW's own finding.*
+   *(parent example) This is the shape of the error where a draft turned IoannidouPintoWang2022's
+   report of Siegmann/Dyachenko's non-linearity into IPW's own finding.*
 4. **Term-presence test.** Every domain term inside an attributed clause must pass the three-test rule
    **against that paper's own `../{{FIELD}}-lit/references/corpus/<key>.txt`**, not the corpus at large.
    *(parent: `LDI` in IoannidouPintoWang2022 — 13 raw hits, 1 word-bounded, and that one a footnote
    URL.)* **A term that is real in the corpus cannot be put in a paper's mouth.**
+
 <!-- PARENT-BLOCK tier=4 -->
 > **[PARENT — economics/finance verb-ladder counts. Rewrite from this instance's own measurements at Tier 4 and delete this block's markers; check_drift fails at Tier 4 while it remains.]**
 
@@ -307,6 +309,7 @@ warrant survives, flagged, into `LEAVE TO AUTHOR`.
    `attribute X to Y` (33) re-attributes; `note that` (544) is the floor when the source line is thin;
    `consistent with` (996) aligns without claiming. **`report` is NOT an attribution verb** — it takes
    `that` only 4% of the time and points at your own tables.
+
 <!-- /PARENT-BLOCK -->
 
 ## Claim → evidence tracer
@@ -348,7 +351,9 @@ finished intro/abstract wholesale: claim→table (the old half) plus promise→s
 
 From ¶3 on, compare the last three paragraphs on sentence count / first-sentence type / last-sentence type.
 **≥2 of 3 axes identical across all three → `UNIFORM-SHAPE`**; redraft one using a *different attested
-version of the same move*. <!-- PARENT-BLOCK tier=3 -->
+version of the same move*.
+
+<!-- PARENT-BLOCK tier=3 -->
 > **[PARENT — economics/finance uniformity calibration. Rewrite from this instance's own measurements at Tier 3 and delete this block's markers; check_drift fails at Tier 3 while it remains.]**
 
 Calibration over all 60 papers: three consecutive paragraphs with identical
@@ -358,10 +363,11 @@ sentence counts occur in **17 of 484 real windows = 3.5%**.
 = 15.7% — one window in six. Only the three-window is rare enough to mean anything.
 <!-- /PARENT-BLOCK -->
 
-This enforces `humanize` §4 at composition time rather than colliding with it: the skeleton constrains
+This works with the humanizer's rule against uniform sentence shapes rather than colliding with it: the skeleton constrains
 **move order**, never sentence micro-architecture. Uniform move order is what the corpus does; uniform
 sentence shape is what AI does. `py -3 scripts/draftcheck.py para` supplies the sentence counts; the two
-type axes stay judgment (`introduction/00-skeleton.md` §5 holds the only first-sentence taxonomy).
+type axes stay judgment (the introduction chapter's `00-skeleton.md`, once Tier 3 writes it, holds
+the first-sentence taxonomy).
 
 ## Paragraph completeness — the `PARA` slot (argument, not evidence)
 
@@ -390,6 +396,9 @@ file and say so in the SKELETON line (`part: <part> (2nd pass)`).
 
 ## Output
 
+<!-- PARENT-EXAMPLE -->
+> *Parent example (economics/finance): the shape is the lesson; the names and numbers are not this field's.*
+
 ```
 <the paragraph, verbatim LaTeX, nothing above it>
 
@@ -414,6 +423,8 @@ MOVE-CHECK  Version 7 Pattern executed: concession → gap → stake — pass, 1
 STATE  recorded: state.py use intro 03-tension 7 "opening on the gap" · 2 source lines cached
 NEXT   /{{FIELD}}-lit on this paragraph (register) · manuscript untouched; state file appended
 ```
+
+<!-- /PARENT-EXAMPLE -->
 
 ### Step 4 · SELF-CHECK (each question is answered by a SLOT, not from memory)
 
@@ -466,9 +477,10 @@ NEXT   /{{FIELD}}-lit on this paragraph (register) · manuscript untouched; stat
 | `results/` | `01-orientation · 02-estimate · 03-magnitude · 04-cut · 05-adjudication · 06-apparatus` | 33 |
 | `robustness/` | `01-framing · 02-assumption · 03-perturbation · 04-rivals · 05-extension` | 28 |
 | `conclusion/` | `01-reentry · 02-findings · 03-fencing · 04-placement · 05-consequence · 06-agenda` | 22 |
+
 <!-- /PARENT-BLOCK -->
 
-Every `00-skeleton.md` (14–36 KB) carries: the router, the arc, the chapter-wide length distribution,
+Every `00-skeleton.md` carries: the router, the arc, the chapter-wide length distribution,
 the **chapter-wide zeros** (what this literature never does here), the boundary rules against the
 adjacent chapters, and `## For this manuscript`. Every part file carries its Versions plus whatever
 ordering / budget / first-split the corpus supports for that part.
@@ -495,12 +507,16 @@ ordering / budget / first-split the corpus supports for that part.
 | `references/slices/<job>/<key>.txt` | Verbatim chapter text per paper per job, cut from the map. **The top-level `slices/_manifest.md` — one file for all jobs, no per-job manifests — carries the denominators to quote** — they differ from chapter-map's wherever a job is sliced positionally rather than from a heading (`abstract` 56/60, `introduction` 59/60). `_openings.md` holds the first 25 lines of every block across all papers; useful for cross-paper regularities, but it runs 133–431 KB, so grep it, do not read it whole. |
 | `references/records/<chapter>.md` | Only `--outline` / evidence re-check — **by offset**, never whole (85–312 KB each). All nine chapters present, plain-language, zero labels: `grep -n "^### <Key>" ` for an offset, then read that block. This is the evidence layer the Versions were induced from. |
 | `pipeline/` | Only when re-slicing or re-building. Scripts are self-relative and re-verified runnable 2026-08-26 (`recount.py` had pointed at a record file renamed in the intro split — fixed); the eight `a2_out_*.tsv` (four waves + retag + three correction rounds) are identification-agent outputs and **cannot be regenerated cheaply**. |
+
 <!-- /PARENT-BLOCK -->
+
+| File | When |
+|---|---|
 | `references/verb-ladder.md` | Whenever a sentence attributes to a cited paper |
-| `references/notes-index.md` | Step 2b — cite-key → note path; §B is the no-note list. **Absent until manuscript onboarding**; until then paste from the corpus file instead |
+| `references/notes-index.md` | Step 2b — cite-key → note path; §B is the no-note list. **Written by onboarding when reading notes are given (`--notes`)**; without it, paste from the corpus file |
 | `references/structure-canon.md` | The distilled writing canon on section/paragraph architecture — S1–S14, Q1–Q7, D1–D7, every rule with its corpus status and a verbatim `canon-sources/` quote. Consult when a structural call needs an authority |
 | `references/structure-norms.json` | The numbers behind the canon and the router typing appendices; rebuild with `py -3 scripts/measure_structure.py` |
-| canon sources (`canon_dir` in field-config.yaml) | The published writing guides, full text, ligature-normalized; `_manifest.md` has URLs, fetch dates and recorded failures. Grep a quote before trusting it |
+| canon sources (`canon_dir` in field-config.yaml) | The published writing guides, full text, ligature-normalized; `_manifest.md` has the sources, URLs, the conversion date and the files not converted. Grep a quote before trusting it |
 | `references/evidence-map.md` | Step 2a — the cached section/table/figure index; `py -3 scripts/build_evidence_map.py --check` before trusting, rebuild on STALE. **Absent until `manuscript_tex` is set in `references/field-config.yaml`** |
 | `references/manuscript-state.md` | Step 0 read · step 5 write (via `state.py` only) — Versions used/rejected in THIS manuscript, cached source-line adjudications. **Created by `py -3 scripts/state.py` on first use**; its absence means no paragraph has been drafted yet |
 | `../{{FIELD}}-lit/references/register.md` §8 | Once per session — read §8's rules R9–R11 (the R9 grade ladder, the K15 structure gate) for drafting guidance only. The full cohesion protocol (cohesion.py, N−1 JOINS table, M8 adjudication) belongs to `/{{FIELD}}-lit`, strictly downstream; this skill never runs it |
@@ -510,8 +526,8 @@ ordering / budget / first-split the corpus supports for that part.
 
 **Corpus query boundary.** Corpus-WIDE frequency or existence questions ("is this term in
 the literature?", recomputing a verb-ladder count) go through `../{{FIELD}}-lit/scripts/attest.py`
-— the position-379 truncation failure lives only in hand-written corpus-wide Greps, and
-attest.py exists to make it impossible. Single-paper verbatim reads (pasting a source line
+— in the parent build a hand-written corpus-wide Grep stopped at its 250-line display limit
+and reported a term at result position 379 as absent; attest.py exists to make that impossible. Single-paper verbatim reads (pasting a source line
 from `corpus/<key>.txt`, the term-presence test against ONE paper) are correct as direct
 reads — attest.py has no per-paper filter, and a single-file read cannot truncate a result
 stream.
@@ -520,9 +536,12 @@ stream.
 
 - **Not a style editor** — register is `/{{FIELD}}-lit`'s call, strictly downstream. Its rule 1 ("never change
   a claim, a cite, a number, or the order of the argument") is exactly the boundary between us.
-- **Not a fact-checker of external sources** — `EXTERNAL` rows route to `/verify-claims`.
-- **Not a manuscript reviewer** — `/review-paper`, `/seven-pass-review` run after the manuscript exists.
-- **Not a reproducibility auditor** — claim → R/Stata output is `/audit-reproducibility`.
+- **Not a fact-checker of external sources** — `EXTERNAL` rows route to a claim-verification skill
+  such as `/verify-claims` (optional, not included).
+- **Not a manuscript reviewer** — a review skill (`/review-paper`, `/seven-pass-review`; optional)
+  runs after the manuscript exists.
+- **Not a reproducibility auditor** — claim → analysis output belongs to a reproducibility check
+  such as `/audit-reproducibility` (optional).
 
 **It drafts, so its output can be pasted unread.** The brake is the write contract at the top of this
 file: `Write`/`Edit` absent, `Bash` confined to the read-only checkers and the single `state.py`

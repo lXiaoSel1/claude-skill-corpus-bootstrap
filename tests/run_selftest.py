@@ -14,6 +14,9 @@ assert each defect is caught:
 Part 3 — one-step onboarding, then every <field>-polish script (1.2.0).
 Part 4 — Tier 4's writing canon: canon_ingest.py, check_canon_quotes.py and
 the draft check_drift canon lines (1.3.0).
+Part 5 — the inputs that broke 1.3.0 (1.3.1).
+Part 6 — 1.4.0: parent text kept apart, the polish workflow's fixes, and the
+draft and lit scripts nothing tested before.
 Exit 0 only if every check passes. Writes nothing outside the temp dir.
 
     py -3 tests/run_selftest.py [--keep]
@@ -459,7 +462,9 @@ def integration(tmp):
     rc, out = run([os.path.join(draft, "scripts", "check_drift.py")])
     check("draft check_drift skeleton green", rc == 0, out.strip().splitlines()[-1][:50])
     rc, out = run([os.path.join(FACTORY, "scripts", "tier_status.py"), "fixture", "--dest", skills])
-    check("tier_status with --dest", rc == 0 and "NEXT" in out)
+    check("tier_status with --dest: Tier 0 done, Tier 1 next",
+          rc == 0 and re.search(r"\[DONE\] Tier 0 ", out) and re.search(r"\[NEXT\] Tier 1 ", out),
+          out.strip()[:60])
 
 
 # ---------------------------------------------------------------- part 3
@@ -711,7 +716,9 @@ def onboard_polish(tmp):
     with open(yml, "w", encoding="utf-8") as fh:
         fh.write("sweep_controls:\n  - the authors argue\n  - against the backdrop\n")
     rc, out = prun("doctor.py")
-    check("polish doctor: manuscript found, steps listed", rc == 0 and "snapshot.py" in out and "ready" in out)
+    check("polish doctor: manuscript found; snapshot ready, opener check needs draft Tier 3",
+          rc == 0 and re.search(r"a\s+snapshot\.py.*ready", out)
+          and re.search(r"d2\s+opener_check\.py\s+needs draft Tier 3", out), out.strip()[-60:])
     rc, out = prun("snapshot.py", "base")
     check("polish snapshot: both sections saved",
           rc == 0 and os.path.isfile(os.path.join(ms_dir, ".polish", "snapshots", "base", "intro.tex")))
@@ -719,7 +726,7 @@ def onboard_polish(tmp):
     check("polish snapshot refuses to overwrite", rc != 0)
     rc, out = prun("sweep.py", "intro")
     check("polish sweep: FOCUS listed; a control absent from the draft still CAUGHT",
-          "FOCUS intro" in out and "CAUGHT  'against the backdrop'" in out,
+          rc == 0 and "FOCUS intro" in out and "CAUGHT  'against the backdrop'" in out,
           out.strip()[-90:])
     with open(yml, "w", encoding="utf-8") as fh:
         fh.write("sweep_controls:\n  - the authors argue\n  - in the first year\n")
@@ -741,9 +748,11 @@ def onboard_polish(tmp):
     rc, out = prun("note_terms.py", "Note2016", "spending")
     check("polish note_terms: quote with its page", rc == 0 and "p.4" in out)
     rc, out = prun("scan_appositive.py", "intro")
-    check("polish scan_appositive: ', a difference attributed' found", "a difference attributed" in out)
+    check("polish scan_appositive: ', a difference attributed' found",
+          rc == 0 and "a difference attributed" in out)
     rc, out = prun("para_lengths.py")
-    check("polish para_lengths runs (paragraphs, distribution)", "paragraphs:" in out and "distribution" in out,
+    check("polish para_lengths runs (paragraphs, distribution), rules pass",
+          rc == 0 and "paragraphs:" in out and "distribution" in out,
           out.strip()[:60])
     rc, out = prun("words_compare.py")
     check("polish words_compare: no slices -> skipped, not a crash", rc == 0 and "skipped" in out)
@@ -952,11 +961,16 @@ def canon_tier4(tmp):
     json.dump(d, open(os.path.join(draft, "references", "registry.json"), "w", encoding="utf-8"), indent=1)
     rc, out = run([os.path.join(draft, "scripts", "check_drift.py")])
     want = ("structure-canon.md exists", "canon-sources: 3 txt + manifest", "canon spot-quotes greppable",
-            "canon file points at the shared source", "canon carries TO-MEASURE",
+            "canon file cites canon-sources", "canon carries TO-MEASURE",
             "canon quotes verbatim at their pointers")
     got = [w for w in want if re.search(r"PASS %s" % re.escape(w), out)]
-    check("draft check_drift Tier 4: all six writing-canon lines PASS", len(got) == 6,
+    # the run ends with a summary line, so a crash after the six lines shows
+    check("draft check_drift Tier 4: all six writing-canon lines PASS", len(got) == 6
+          and re.search(r"^\d+ checks, \d+ failed", out, re.M) and "Traceback" not in out,
           "missing: %s" % [w for w in want if w not in got])
+    check("draft check_drift: PARENT-BLOCKs of built tiers 3 and 4 fail; markers paired",
+          re.search(r"FAIL no PARENT-BLOCK left for a built tier\s+tiers \[3, 4\]", out)
+          and "PASS PARENT-BLOCK / PARENT-EXAMPLE markers paired" in out, "")
 
 
 # ---------------------------------------------------------------- part 5
@@ -1099,7 +1113,8 @@ def review_fixes(tmp):
     with open(os.path.join(gd, "manual.md"), "w", encoding="utf-8") as fh:
         fh.write(_paper(28))
     canon = os.path.join(draft, "references", "canon-sources")
-    os.makedirs(canon)
+    check("stamp creates the field's own, empty canon-sources folder (canon_dir points there)",
+          os.path.isdir(canon) and not os.listdir(canon))
     with open(os.path.join(canon, "manual.txt"), "w", encoding="utf-8") as fh:
         fh.write("A guide put here by hand.\n")
     rc, out = run([os.path.join(sc, "canon_ingest.py"), "health-econ", "--dest", skills, "--src", gd])
@@ -1111,13 +1126,329 @@ def review_fixes(tmp):
     check("polish doctor asks for Python 3.8", "(3, 8)" in d and "(3, 7)" not in d)
 
 
+# ---------------------------------------------------------------- part 6
+# 1.4.0: parent text kept apart, the polish workflow's 23 fixes, the draft and
+# lit scripts nothing tested before. Runs on part 3's fx3 field (lit Tier
+# 0-1, draft Tier 3 and 4 marked by parts 3-4) and part 5's health-econ field.
+PARENT_FP = re.compile(r"PBGC|Rauh|IoannidouPintoWang|AnHuangZhang|Siegmann|MAP-21|Schedule SB|"
+                       r"2,308,511|[Pp]ension")
+_PM_OPEN = re.compile(r"<!-- PARENT-(?:BLOCK tier=\d|EXAMPLE) -->")
+_PM_CLOSE = re.compile(r"<!-- /PARENT-(?:BLOCK|EXAMPLE) -->")
+
+
+def unlabelled_parent_text(text):
+    """Parent fingerprints outside PARENT-* blocks, in a paragraph with no
+    "parent" / "父本" label."""
+    out, depth = [], 0
+    for para in re.split(r"\n\s*\n", text):
+        inside = depth > 0
+        for line in para.split("\n"):
+            depth += len(_PM_OPEN.findall(line)) - len(_PM_CLOSE.findall(line))
+        if not inside and not _PM_OPEN.search(para) and not re.search(r"parent|父本", para, re.I):
+            out += PARENT_FP.findall(para)
+    return out
+
+
+def v140(tmp):
+    print("\npart 6: 1.4.0 -- parent text, the polish workflow, untested draft and lit scripts")
+    sc = os.path.join(FACTORY, "scripts")
+    T = os.path.join(FACTORY, "templates")
+    root = os.path.join(tmp, "p3")
+    ms_dir, skills = os.path.join(root, "paper"), os.path.join(root, "skills")
+    lit, draft, pol = (os.path.join(skills, "fx3-" + s) for s in ("lit", "draft", "polish"))
+    main_tex = os.path.join(ms_dir, "main.tex")
+
+    def prun(script, *args):
+        return run([os.path.join(pol, "scripts", script)] + list(args), cwd=root)
+
+    # ---- parent text --------------------------------------------------------
+    files = [os.path.join(T, t, "SKILL.md.tmpl") for t in ("lit", "draft", "polish")]
+    for t in ("lit", "draft", "polish"):
+        files += sorted(glob.glob(os.path.join(T, t, "references", "*.md")))
+    left = {os.path.relpath(f, T): unlabelled_parent_text(open(f, encoding="utf-8").read()) for f in files}
+    left = {k: v for k, v in left.items() if v}
+    check("templates: parent names and numbers only inside PARENT-* blocks or labelled paragraphs",
+          not left, str(left)[:90])
+    notes = [f for f in files if f.endswith("SKILL.md.tmpl")
+             and "on macOS and Linux run them with `python3`" not in open(f, encoding="utf-8").read()]
+    check("every template SKILL tells macOS/Linux users to use python3", not notes, str(notes))
+    terms = os.path.join(lit, "references", "terms.md")
+    keep_terms = open(terms, encoding="utf-8").read()
+    with open(terms, "a", encoding="utf-8") as fh:
+        fh.write("\n<!-- PARENT-EXAMPLE -->\nan example never closed\n")
+    rc, out = run([os.path.join(lit, "scripts", "check_drift.py")])
+    with open(terms, "w", encoding="utf-8") as fh:
+        fh.write(keep_terms)
+    check("lit check_drift: an unpaired PARENT marker fails",
+          rc == 1 and re.search(r"FAIL PARENT-BLOCK / PARENT-EXAMPLE markers paired\s+terms\.md", out),
+          out.strip().splitlines()[-1][:60])
+
+    # ---- polish: helpers ----------------------------------------------------
+    rp = fresh_import("_rp", os.path.join(T, "polish", "scripts"))
+    check("sweep frames: a statistic label is not the word 'or'; citations are not words",
+          "or" not in rp.gram_toks("women (OR 0.41) were less likely")
+          and "or" in rp.gram_toks("women or men were less likely")
+          and rp.prose_words("Women were less likely CITEX to return") == 6)
+    defs = rp.abbreviations("from the Traumatic Brain Injury Model Systems (TBIMS) and traumatic brain"
+                            " injury (TBI) databases")
+    check("abbreviations: defined forms found, and expanded then re-abbreviated",
+          defs.get("TBI") == "traumatic brain injury"
+          and any(v == "TBIMS" for v, _ in rp.term_variants("TBI Model Systems", defs)), str(defs))
+    import fitz
+    pdf = os.path.join(root, "links.pdf")
+    d = fitz.open()
+    for _ in range(3):
+        d.new_page()
+    d[0].insert_link({"kind": fitz.LINK_GOTO, "from": fitz.Rect(400, 780, 480, 792), "page": 2,
+                      "to": fitz.Point(72, 100)})
+    d[1].insert_link({"kind": fitz.LINK_GOTO, "from": fitz.Rect(72, 40, 140, 52), "page": 2,
+                      "to": fitz.Point(72, 100)})
+    d.save(pdf)
+    d.close()
+    hits = rp.split_cite_links(pdf)
+    check("compile: a citation link split by a page break is listed", hits is not None and len(hits) == 1,
+          str(hits))
+    pdf = os.path.join(root, "pages3.pdf")
+    d = fitz.open()
+    for w in ("alpha words on the first page", "beta words on the second page", "gamma words on the third"):
+        d.new_page().insert_text((72, 72), w)
+    d.save(pdf)
+    d.close()
+    t3 = rp.pdf_text(pdf)
+    got = [rp.pdf_page(pdf, t3.index(w)) for w in ("alpha", "beta", "gamma")]
+    check("pdf_ctx / source_term_check pages: a match's page in the PDF file", got == [1, 2, 3], str(got))
+    split = lambda t: [s for s in re.split(r"(?<=\.)\s+(?=[A-Z])", t) if s]   # noqa: E731
+    lines = list(enumerate(["Smith found a rise \\citep{Smith2019}. It was large.", "",
+                            "Returns differ by group. Jones found a fall \\citep{Jones2020}."], 1))
+    got = list(rp.cite_blocks(lines, split))
+    check("sent_diff blocks: a paragraph that opens without a citation starts its own block",
+          got == [("Smith2019", 1), ("(no citation)", 1), ("Jones2020", 1)], str(got))
+
+    # ---- polish: scripts on the onboarded manuscript ------------------------
+    rc, out = prun("sweep.py", "intro")
+    check("sweep FOCUS: coverage line says OK or LOW, L2b split into core and compositional",
+          rc == 0 and re.search(r"coverage (OK|LOW): cited papers in the style corpus", out)
+          and re.search(r"\(L2b\): \d+ — core \d+ \(read each\), compositional \d+", out), out.strip()[-60:])
+    rc, out = prun("cohesion_loop.py", "intro")
+    check("cohesion_loop: every join with its overlap", rc == 0 and len(re.findall(r"overlap \d\.\d\d", out)) >= 3,
+          out.strip()[-60:])
+    rc, out = prun("doctor.py")
+    check("doctor: steps in run order, the baseline at a, opener check ready at draft Tier 3",
+          re.search(r"a\s+snapshot\.py \+ counts\.py \(baseline\)\s+ready", out)
+          and re.search(r"d2\s+opener_check\.py\s+ready", out)
+          and out.index("source_term_check") < out.index("rewrite + attest"), out.strip()[-60:])
+    sk = open(os.path.join(pol, "SKILL.md"), encoding="utf-8").read()
+    block = sk[sk.index("## One section, start to finish"):]
+    check("polish SKILL: e before c, c's edits written before d, re-check after f",
+          "a → b → e → c → d → d2 → f → g" in sk
+          and block.index("source_term_check") < block.index("attest.py")
+          < block.index("rep.py") < block.index("cohesion_loop.py")
+          and "--batch" in sk and ".polish/records/session.log" in sk)
+    f = sk[sk.index("### f ·"):sk.index("### g ·")]
+    check("polish SKILL: steps written in run order (e before c); f asks for findings, not embedded mode",
+          sk.index("### b ·") < sk.index("### e ·") < sk.index("### c ·") < sk.index("### d ·")
+          and "lists findings" in f and "Call the humanizer skill in embedded mode" not in sk
+          and "up to about six words" in sk)
+    log = os.path.join(ms_dir, ".polish", "records", "session.log")
+    check("rep.py appends a line to the session log, naming its pairs file",
+          os.path.isfile(log) and re.search(r"replacement\(s\)  backup \S+  pairs .+\.txt",
+                                            open(log, encoding="utf-8").read()))
+    note = os.path.join(root, "notes", "Note2016.md")
+    keep_note = open(note, encoding="utf-8").read()
+    with open(note, "a", encoding="utf-8") as fh:
+        fh.write("- 依据：p.2：\"spending fell in the first year after the reform\"；"
+                 "p.7：\"spending rose again in the later years\"\n")
+    rc, out = prun("note_terms.py", "Note2016", "spending")
+    with open(note, "w", encoding="utf-8") as fh:
+        fh.write(keep_note)
+    check("note_terms: the page before a quote (p.N: \"...\") and after it (\"...\" (p.N))",
+          rc == 0 and re.search(r"p\.2\s+spending fell", out) and re.search(r"p\.7\s+spending rose again", out)
+          and re.search(r"p\.4\s+medical spending rose sharply", out), out.strip()[-80:])
+
+    # counts: a baseline taken before the first compile compares no bibitems
+    base = os.path.join(ms_dir, ".polish", "counts-baseline.json")
+    bbl = os.path.join(ms_dir, "main.bbl")
+    os.remove(base)
+    os.rename(bbl, bbl + ".off")
+    rc1, _ = prun("counts.py")
+    os.rename(bbl + ".off", bbl)
+    rc2, out = prun("counts.py")
+    check("counts: a baseline without a .bbl does not fail later runs",
+          rc1 == 0 and rc2 == 0 and "n/a (no .bbl when the baseline was taken)" in out, out.strip()[-60:])
+
+    # sent_diff without page comments: one block per cited study
+    prun("snapshot.py", "b6", "results")
+    pairs = os.path.join(root, "pairs6.txt")
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("The authors argue that this pattern is general\n>>>\n"
+                 "The authors argue that this pattern holds in general\n")
+    prun("rep.py", "results", pairs)
+    rc, out = prun("sent_diff.py", "b6", "results")
+    check("sent_diff: no page comments -> one block per cited study",
+          rc == 0 and "one block per cited study" in out and "=== B2 Missing2000" in out
+          and "(no comment)" not in out, out.strip()[-60:])
+    # trial_diff: numbers swapped between two studies' blocks
+    prun("snapshot.py", "b6i", "intro")
+    intro = open(os.path.join(ms_dir, "sections", "intro.tex"), encoding="utf-8").read()
+    a = re.search(r"rose by (\d+) percent", intro).group(1)
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("FILE intro\nrose by %s percent\n>>>\nrose by 2.3 percent\n===\n"
+                 "FILE intro\nspending grew 2.3 percent\n>>>\nspending grew %s percent\n" % (a, a))
+    rc0, o0 = prun("rep_multi.py", pairs)
+    rc, out = prun("trial_diff.py", "b6i", "intro")
+    check("trial_diff: numbers swapped between studies -> multiset MATCH, MOVED? per block",
+          rc0 == 0 and rc == 0 and out.count("MOVED?") == 2, (o0 + out).strip()[-70:])
+    # opener_check: a long lead-in repeated three times
+    op = os.path.join(ms_dir, "op.tex")
+    with open(op, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Results}\\label{sec:results}\n"
+                 + " ".join("After controlling for prior wages, the %s effect was smaller than before." % w
+                            for w in ("first", "second", "third")) + "\n\\end{document}\n")
+    rc, out = prun("opener_check.py", "results", "--manuscript", op)
+    check("opener_check: a repeated first-three-word lead-in is listed",
+          rc == 0 and re.search(r"'After controlling for'\s+x3", out), out.strip()[-60:])
+    # source_term_check: an abbreviation defined in the manuscript
+    ab = os.path.join(ms_dir, "abbr.tex")
+    with open(ab, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Intro}\\label{sec:intro}\n"
+                 "The occupational injury (OI) rate rose \\citep{Smith2019}.\n\\end{document}\n")
+    rc, out = prun("source_term_check.py", "Smith2019", "OI rate", "--manuscript", ab)
+    check("source_term_check: an abbreviation is tried spelled out",
+          rc == 0 and re.search(r"\+\d+ via OI=occupational injury", out), out.strip()[:80])
+    # compile --dry-run: why this engine
+    eng = {}
+    for name, pre in (("e1", "\\usepackage{fontspec}\n"),
+                      ("e2", "\\usepackage{iftex}\n\\ifPDFTeX\n\\usepackage[T1]{fontenc}\n\\else\n"
+                             "\\usepackage{fontspec}\n\\fi\n"),
+                      ("e3", "")):
+        p = os.path.join(ms_dir, name + ".tex")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(("% !TEX program = lualatex\n" if name == "e3" else "")
+                     + "\\documentclass{article}\n" + pre + "\\begin{document}\nx\n\\end{document}\n")
+        rc, out = prun("compile.py", "--dry-run", "--manuscript", p)
+        m = re.search(r"engine (\w+)", out)
+        eng[name] = m.group(1) if m else out.strip()[-40:]
+    check("compile --dry-run: fontspec -> xelatex, fontspec only in an engine test -> pdflatex,"
+          " % !TEX program -> lualatex",
+          eng == {"e1": "xelatex", "e2": "pdflatex", "e3": "lualatex"}, str(eng))
+    # attest: a phrase found only through other forms of its last word
+    rc, out = run([os.path.join(lit, "scripts", "attest.py"), "--json", "--scope", "style",
+                   "first pattern holding", "appealing"], cwd=lit)
+    try:
+        res = {r["term"]: r["verdict"] for r in json.loads(out[out.index("["):])}
+    except ValueError:
+        res = {}
+    check("attest: a phrase matched only through its suffix family is THIN; a single word is not",
+          res.get("first pattern holding") == "THIN" and res.get("appealing") == "ATTESTED", str(res)[:80])
+
+    # ---- draft and lit scripts ------------------------------------------------
+    ni = os.path.join(draft, "references", "notes-index.md")
+    check("onboarding with --notes writes the draft's notes-index.md",
+          os.path.isfile(ni) and "`Note2016`" in open(ni, encoding="utf-8").read())
+    dc = os.path.join(draft, "scripts", "draftcheck.py")
+    para = os.path.join(root, "para.txt")
+    with open(para, "w", encoding="utf-8") as fh:
+        fh.write("Costs rose by 12 percent \\citep{Smith2019}. \\citet{Lee2020} report that use rose. "
+                 "The effect is larger for older workers.\n")
+    rc1, o1 = run([dc, "para", para])
+    rc2, o2 = run([dc, "own", "costs rose (Smith, 2019)", "costs rose in our sample"])
+    rc3, o3 = run([dc, "version", "introduction/00-none.md", "1"])
+    check("draftcheck: para (sentences, cite keys, report-that flag), own, version",
+          rc1 == 0 and "sentences: 3" in o1 and "Lee2020, Smith2019" in o1 and "VERB FLAG" in o1
+          and "THIRD-PARTY" in o2 and "clean" in o2 and rc3 == 1 and "NO SUCH PART FILE" in o3,
+          (o1 + o2 + o3).strip()[-60:])
+    st = os.path.join(draft, "scripts", "state.py")
+    rc1, _ = run([st, "reject", "intro", "03-gap", "4", "too long | for this paper"])
+    rc2, _ = run([st, "cache", "Smith2019", "find", "owner", "costs rose", "corpus/Smith2019.txt:12"])
+    rc3, o3 = run([st, "list"])
+    check("state.py: reject and cache rows written (pipes escaped), list reads them",
+          rc1 == rc2 == rc3 == 0 and "too long \\| for this paper" in o3 and "Smith2019" in o3, o3.strip()[-60:])
+    em = os.path.join(draft, "scripts", "build_evidence_map.py")
+    rc1, o1 = run([em])
+    emd = os.path.join(draft, "references", "evidence-map.md")
+    txt = open(emd, encoding="utf-8").read() if os.path.isfile(emd) else ""
+    rc2, _ = run([em, "--check"])
+    later = os.path.getmtime(os.path.join(ms_dir, "sections", "intro.tex")) + 120
+    os.utime(os.path.join(ms_dir, "sections", "intro.tex"), (later, later))
+    rc3, o3 = run([em, "--check"])
+    check("build_evidence_map: follows \\input; editing an input file makes the map STALE",
+          rc1 == 0 and "2 个 \\input" in txt and rc2 == 0 and rc3 == 1 and "STALE" in o3, o1.strip()[-60:])
+    rc, out = run([os.path.join(sc, "tier_status.py"), "fx3", "--dest", skills])
+    check("tier_status rows: Tier 0 done, Tier 2 next with its pass forecast",
+          re.search(r"\[DONE\] Tier 0", out) and re.search(r"\[NEXT\] Tier 2 .*~\d+ wave", out)
+          and "doctor.py" in out, out.strip()[:60])
+    rc, out = run([os.path.join(sc, "tier_status.py"), "fixture", "--dest", os.path.join(tmp, "skills")])
+    check("tier_status: a new field has no writing guides yet", "writing canon: no guides yet" in out,
+          (re.findall(r"writing canon:.*", out) or [out.strip()[-50:]])[0][:60])
+    # build_exemplars: a verbatim sentence merges, a paraphrase is refused
+    corpus = open(os.path.join(lit, "references", "corpus", "Smith2019.txt"), encoding="utf-8").read()
+    sent = re.search(r"The \w+ analysis of [a-z ]+ finds significant effects in the \w+ year of the panel\.",
+                     re.sub(r"\s+", " ", corpus)).group(0)
+    shard = os.path.join(lit, "references", "_exemplar_shards", "s1.md")
+    with open(shard, "w", encoding="utf-8") as fh:
+        fh.write("## Smith2019\n\n- **[results]** \"%s\" — Smith2019\n" % sent)
+    be = os.path.join(lit, "scripts", "build_exemplars.py")
+    rc1, _ = run([be])
+    rc2, _ = run([be, "--write"])
+    with open(shard, "a", encoding="utf-8") as fh:
+        fh.write("- **[results]** \"A sentence that no paper in the corpus contains at all.\" — Smith2019\n")
+    rc3, o3 = run([be, "--write"])
+    os.remove(shard)
+    check("build_exemplars: a verbatim sentence is written, a paraphrase refused",
+          rc1 == 0 and rc2 == 0 and os.path.isfile(os.path.join(lit, "references", "exemplars.md"))
+          and rc3 == 1 and "REFUSING" in o3, o3.strip()[-60:])
+    rc, out = run([os.path.join(lit, "scripts", "cache.py"), "add", "first pattern holds"], cwd=lit)
+    cand = os.path.join(lit, "references", "candidates.md")
+    check("cache.py add records an attestation in candidates.md",
+          rc == 0 and "first pattern holds" in open(cand, encoding="utf-8").read(), out.strip()[-60:])
+
+    # ---- factory scripts --------------------------------------------------------
+    rc, out = run([os.path.join(sc, "stamp.py"), "fx3", "--dest", skills])
+    other = os.path.join(tmp, "p6")
+    os.makedirs(other)
+    rc2, out2 = run([os.path.join(sc, "stamp.py"), "fx3", "--add", "polish", "--dest", other,
+                     "--lit-dir", lit, "--draft-dir", draft])
+    inst = os.path.join(other, "fx3-polish", "references", "instance.json")
+    lit_dir = json.load(open(inst, encoding="utf-8")).get("lit_dir") if os.path.isfile(inst) else None
+    check("stamp: refuses to overwrite; --add polish elsewhere names the lit skill by absolute path",
+          rc != 0 and "refusing to overwrite" in out and rc2 == 0
+          and lit_dir and os.path.isabs(lit_dir), "%s %s" % (rc2, lit_dir))
+    guides = os.path.join(tmp, "p4", "guides")
+    canon = os.path.join(draft, "references", "canon-sources")
+    before = sorted(os.listdir(canon))
+    rc1, o1 = run([os.path.join(sc, "canon_ingest.py"), "fx3", "--dest", skills, "--src", guides, "--dry-run"])
+    dry_same = before == sorted(os.listdir(canon))
+    rc2, _ = run([os.path.join(sc, "canon_ingest.py"), "fx3", "--dest", skills, "--src", guides,
+                  "--force", "styleguide-a"])
+    sg = open(os.path.join(canon, "styleguide-a.txt"), encoding="utf-8").read()
+    mp = os.path.join(tmp, "p4", "map")
+    os.makedirs(mp)
+    with open(os.path.join(mp, "keys.csv"), "w", encoding="utf-8") as fh:
+        fh.write("key,path\nwebmap,../guides/web guide.html\n")
+    rc3, _ = run([os.path.join(sc, "canon_ingest.py"), "fx3", "--dest", skills,
+                  "--map", os.path.join(mp, "keys.csv")], cwd=tmp)
+    check("canon_ingest: --dry-run writes nothing, --force reconverts, --map paths from the CSV's folder",
+          rc1 == 0 and "[dry run]" in o1 and dry_same and rc2 == 0 and "A line repaired by hand." not in sg
+          and rc3 == 0 and os.path.isfile(os.path.join(canon, "webmap.txt")), "%s %s %s" % (rc1, rc2, rc3))
+    new = os.path.join(tmp, "p6", "new")
+    os.makedirs(new)
+    make_pdf(os.path.join(new, "New2024.pdf"), _paper(29))
+    rc1, o1 = run([os.path.join(sc, "ingest.py"), lit, "--src", new, "--dry-run"])
+    rc2, o2 = run([os.path.join(sc, "ingest.py"), lit, "--src", new, "--map",
+                   os.path.join(lit, "references", "corpus_map.csv")])
+    check("ingest: --dry-run converts nothing; --map with --src is refused",
+          rc1 == 0 and "would convert" in o1
+          and not os.path.isfile(os.path.join(lit, "references", "corpus", "New2024.txt"))
+          and rc2 != 0 and "not both" in o2, (o1 + o2).strip()[-60:])
+
+
 def main():
     keep = "--keep" in sys.argv
     tmp = tempfile.mkdtemp(prefix="cb-selftest-")
     try:
         # a crash is a FAIL, never an abort -- run against an OLD factory the
         # suite must still report every check it can (qualification run)
-        for part in (unit_tests, integration, onboard_polish, canon_tier4, review_fixes):
+        for part in (unit_tests, integration, onboard_polish, canon_tier4, review_fixes, v140):
             try:
                 part(tmp)
             except Exception as e:  # noqa: BLE001

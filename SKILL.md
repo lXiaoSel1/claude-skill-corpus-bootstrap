@@ -2,7 +2,7 @@
 name: corpus-bootstrap
 description: "Bootstrap a new research field's writing infrastructure from the user's own downloaded papers. Stamps three skill instances — <field>-lit (style/terminology reviewer against the field's corpus), <field>-draft (paragraph drafting with evidence ledgers) and <field>-polish (section-by-section revision of the user's manuscript against the literature and the cited PDFs) — then builds their reference layers in five acceptance-gated tiers (corpus → style measurements → chapter taxonomy+map → records+Versions → exemplars). One-step onboarding takes a manuscript and a library (PDF folder, Zotero/JabRef .bib, or PDFs plus reading notes), matches every citation to its PDF, and builds Tiers 0-1 with no configuration file. Use when user says \"我要研究一个新领域\", \"把文献建成语料库\", \"用我的文献库改这篇论文\", \"bootstrap a corpus for X\", \"onboard my manuscript and library\", \"给这个领域盖一套 lit/draft skill\", \"新领域的文献库\". The user downloads the PDFs; nothing is fetched."
 author: Xuan Tang
-version: 1.3.1
+version: 1.4.0
 argument-hint: "[polish <main.tex> <library> | stamp <field> | ingest | tier <n> | status <field>]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Task"]
@@ -10,14 +10,23 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Task"]
 
 # `/corpus-bootstrap` — 给任意领域盖一套 lit + draft + polish 基础设施
 
-You replay, on a new field's corpus, the exact recipe that built the
-economics/finance pair (`mimic-lit` + `draft-section`). The recipe is
-measured, not invented — `references/provenance.md` records how the parents
-were actually built (which artifacts are script-replayable, which needed
-model reading passes, and how many). **The acceptance law: a finished
-instance is structurally identical to its parent** — same file inventory,
-same slots, same registry+check_drift discipline — with every number
-re-measured on the NEW field's corpus, never inherited from economics.
+You replay, on a new field's corpus, the recipe that built an original
+economics/finance pair of skills (called "the parent" in these files; it is
+not part of this skill and is never needed). The recipe is measured, not
+invented — `references/provenance.md` records how the parent was built (which
+artifacts are script-replayable, which needed model reading passes, and how
+many). **The acceptance law: each tier ends with both instances'
+`check_drift` green for that tier** — the templates carry the parent's file
+inventory, slots and registry discipline — with every number re-measured on
+the NEW field's corpus, never inherited from economics.
+
+| `/corpus-bootstrap …` | section below |
+|---|---|
+| `polish <main.tex> <library>` | One-step onboarding |
+| `stamp <field>` | The five tiers, Tier 0 (`stamp.py`) |
+| `ingest` | The five tiers, Tier 0 (`ingest.py`) |
+| `tier <n>` | The five tiers, the row for tier n |
+| `status <field>` | Resume (`tier_status.py`) |
 
 ## Rules
 
@@ -36,8 +45,8 @@ re-measured on the NEW field's corpus, never inherited from economics.
 4. **One tier at a time, acceptance-gated.** Each tier ends with its checklist
    plus the instance's `check_drift` (tier-aware) — then STOP and wait. Print
    the next tier's agent-pass forecast before starting it.
-5. **Parents are read-only.** This skill never modifies `mimic-lit` or
-   `draft-section`; templates are frozen copies, parameterized.
+5. **The parent is read-only.** Templates are frozen, parameterized copies of
+   it; where a machine still has the parent skills, this skill never edits them.
 6. **One exception to rule 4:** one-step
    onboarding runs Tier 0 and Tier 1 back to back without stopping, because
    both are scripts with default decisions the user can change afterwards.
@@ -97,7 +106,7 @@ what is missing.
 |---|---|---|---|---|
 | **0 corpus** | `py -3 scripts/stamp.py <field> [--citation-style author-year\|numeric\|mixed] [--keywords "..."] [--dest <skills-dir>]` → `py -3 scripts/ingest.py <lit> [--src <pdf-folder> --recursive \| --map keys.csv]` (PDFs may stay in the user's library; `drop/` is the default source) → `py -3 <lit>/scripts/build_corpus_meta.py` | corpus/*.txt · `corpus_sources.json` (source, converter + version, sha256, SCAN/SHORT flags) · four-denominator manifest with per-paper role, group and citation culture | scripts, minutes | `py -3 scripts/tier0_accept.py <field>` does all of this with default decisions; by hand: manifest reviewed, SCAN/SHORT/excluded/terminology_only decided in BOTH field-config copies, build_corpus_meta's four denominators copied into the lit registry's `corpus.*`, lit check_drift tier-0 green → append 0 to both registries' built_tiers |
 | **1 style layer** | calibrate `para_min_chars` in field-config → `py -3 scripts/capture.py <lit> measure_register.py register-measurements.md` · `py -3 scripts/capture.py <lit> build_cohesion_norms.py cohesion-measurements.md` · `py -3 <lit>/scripts/build_transitions.py`; fill registry numbers (each builder prints them); replace every `corpus: TO-MEASURE` in cohesion-canon.md and the parent counts in register.md | register measurements · cohesion norms (coarse) · transitions bank | scripts, zero agents | lit check_drift tier-1 green; **live-scan one paragraph of the new field's prose with `/<field>-lit`** — TERMS and REGISTER slots print; user reads the scan |
-| **2 chapter map** | `py -3 <draft>/pipeline/make_sample.py` → `a1_headings.py` → hand-build `groundtruth.json` (~10 papers) → `recall.py` gate → `build_windows.py` → taxonomy induction (prompts/taxonomy-induction.md, reads a1_windows.md) → **USER APPROVES; jobs, positional_jobs, start/end markers land in BOTH field-config copies** → `a2_build.py` → A2 waves (prompts/a2-wave.md) → hand `a3_groundtruth.json` → `build_map.py` (adjudications into its ADJUDICATED dict) → `stage_b_slice.py --dry-run`, then real → `build_names.py` | approved taxonomy · chapter-map · chapter-names · slices + manifest + fingerprint | 1 induction pass + ~4-8 wave/correction passes + A3 gate reads | A3 agreement ≥90% recorded in registry; user reads the taxonomy table and 3 slices; draft check_drift tier-2 green (incl. no tier-2 PARENT-BLOCK left in SKILL.md) |
+| **2 chapter map** | `py -3 <draft>/pipeline/make_sample.py` → `a1_headings.py` → hand-build `groundtruth.json` (~10 papers) → `recall.py` gate → `build_windows.py` → taxonomy induction (prompts/taxonomy-induction.md, reads a1_windows.md) → **USER APPROVES; jobs (each with its definition as the item comment), positional_jobs, start/end markers land in BOTH field-config copies** → `a2_build.py` → A2 waves (prompts/a2-wave.md) → hand `a3_groundtruth.json` → `build_map.py` (adjudications into its ADJUDICATED dict) → `stage_b_slice.py --dry-run`, then real → `build_names.py` | approved taxonomy · chapter-map · chapter-names · slices + manifest + fingerprint | 1 induction pass + ~4-8 wave/correction passes + A3 gate reads | A3 agreement ≥90% recorded in registry; user reads the taxonomy table and 3 slices; draft check_drift tier-2 green (incl. no tier-2 PARENT-BLOCK left in SKILL.md) |
 | **3 records + Versions** | PASS1 shards (prompts/pass1-reading-SPEC.md, ~8-16 papers/agent/chapter) → `verify_shards.py` → PASS2 per chapter (prompts/pass2-induction-SPEC.md) → `para_numbers.py <chapter>` audit, then `--write` → `recount.py` (uniformity calibration → registry+SKILL.md) → `measure_structure.py` + typing appendices → rewrite the tier-3 PARENT-BLOCKs of SKILL.md | records/ · sections/ (skeletons+parts, four-field Versions ≥2-attested) · uniformity gate numbers | ~27×(n/60) PASS1 + 1 PASS2/chapter — **run chapter by chapter, accept each** | draft check_drift tier-3 green (Version counts, four fields, ≥2 attestation — mechanical); user reads one full chapter; `/<field>-draft` drafts its first paragraph |
 | **4 exemplars** | tagging shards (prompts/exemplar-tagging.md, ~10 papers/agent) → `py -3 <lit>/scripts/build_exemplars.py` → registry counts + move_tags → `py -3 <draft>/scripts/measure_verbs.py` → verb-ladder.md + registry `verb_ladder_counts` → **writing canon**: the user collects the field's writing guides; `py -3 scripts/canon_ingest.py <field> --src <folder or .bib>` converts them into `canon-sources/`, writes `_manifest.md`, sets `canon_dir` in both configs and fills registry `canon_sources` (or do these by hand, as the README describes) → ASK (print the estimate), then one agent drafts structure-canon.md with `prompts/structure-canon.md` from `references/structure-canon.skeleton.md` → `py -3 <draft>/scripts/check_canon_quotes.py` exits 0 → rewrite the tier-4 PARENT-BLOCK | exemplars bank (8 move labels) · verb-ladder · structure canon | ~1 pass per 10 papers | both instances' check_drift FULL green = the parent-parity end state |
 
@@ -134,8 +143,8 @@ an instance without a manuscript is normal, not broken.
 
 - **Not a paper fetcher.** No APIs, no scraping, no Sci-Hub-class tools
   (explicitly excluded — see fetch-research.md). You download; it builds.
-- **Not a refactor of the parents.** mimic-lit and draft-section stay
-  untouched; this factory carries frozen parameterized copies.
+- **Not a refactor of the parent.** The parent skills stay untouched; this
+  factory carries frozen parameterized copies.
 - **Not a one-command pipeline.** Tier gates exist because a wrong taxonomy
   poisons everything downstream and 40 agent passes deserve checkpoints.
 
@@ -155,4 +164,4 @@ an instance without a manuscript is normal, not broken.
 
 ## Changelog
 
-See `CHANGELOG.md` (version 1.3.1).
+See `CHANGELOG.md` (version 1.4.0).
