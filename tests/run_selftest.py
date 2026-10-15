@@ -1341,6 +1341,40 @@ def v140(tmp):
     check("attest: a phrase matched only through its suffix family is THIN; a single word is not",
           res.get("first pattern holding") == "THIN" and res.get("appealing") == "ATTESTED", str(res)[:80])
 
+    # ---- 1.4.1: the two gaps the polish rerun left ----------------------------
+    ap = os.path.join(ms_dir, "tails.tex")
+    with open(ap, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Results}\\label{sec:results}\n"
+                 "Rates rose in every state over the decade, with no change over time. "
+                 "Employment fell sharply among older workers, suggesting that age matters. "
+                 "The sample covers many injury types in the region, including fractures and sprains. "
+                 "In 2010, using data from the survey, the authors find a rise. "
+                 "In 2010, with new data, rates rose.\n\\end{document}\n")
+    rc, out = prun("scan_appositive.py", "results", "--manuscript", ap)
+    w = [l for l in out.splitlines() if "[with]" in l]
+    g = [l for l in out.splitlines() if "[-ing]" in l]
+    check("scan_appositive: with and participle tails listed; 'including' and opening adverbials not",
+          rc == 0 and len(w) == 1 and w[0].endswith("with no change over time")
+          and len(g) == 1 and g[0].endswith("suggesting that age matters"), out.strip()[-90:])
+    sw = os.path.join(ms_dir, "since.tex")
+    body = "We find significant effects when claims are denied in every state."
+    with open(sw, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Results}\\label{sec:results}\n"
+                 + body + "\n\\end{document}\n")
+    prun("snapshot.py", "s141", "results", "--manuscript", sw)
+    rc0, out0 = prun("sweep.py", "results", "--since", "s141", "--manuscript", sw)
+    # every word is in each fixture paper; the four together are in none
+    text = open(sw, encoding="utf-8").read().replace(
+        body, "Workers file appeals fractures stable panel. Claims of workers show appeals fractures stable panel.")
+    with open(sw, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    rc1, out1 = prun("sweep.py", "results", "--since", "s141", "--manuscript", sw)
+    check("sweep --since: nothing marked against an unchanged section; a frame the edit brought in is NEW",
+          rc0 == 0 and "0 frame(s) above marked" in out0 and " 0 0-paper frame(s) of the snapshot gone" in out0
+          and rc1 == 0 and re.search(r"appeals fractures stable panel .*NEW", out1)
+          and re.search(r"since snapshot s141: [1-9]\d* frame", out1),
+          (out0 + out1).strip()[-90:])
+
     # ---- draft and lit scripts ------------------------------------------------
     ni = os.path.join(draft, "references", "notes-index.md")
     check("onboarding with --notes writes the draft's notes-index.md",

@@ -308,7 +308,7 @@ py -3 scripts/tier_status.py ecology
 | i | 编译稿件，要求 0 个警告；重新清点引用 | TeX |
 | j | 把这一节渲染成可读文本给你看 | 编译出的 `.bbl` |
 
-会改动文字的步骤都在存过快照之后用 `rep.py` 写入，每一节的记录写在 `.polish/records/<章节>.md`。前一两节改完后它会停下来给你看；你说 "batch"（或加 `--batch`），它就一直做下去，不再停。
+会改动文字的步骤都在存过快照之后用 `rep.py` 写入，每一节的记录写在 `.polish/records/<章节>.md`。f 步之后运行 `sweep.py <章节> --since <快照>`，改动带进来的框架会被标出来，进入下一步之前逐个核对。前一两节改完后它会停下来给你看；你说 "batch"（或加 `--batch`），它就一直做下去，不再停。
 
 ## 工作方式
 
@@ -415,9 +415,7 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 - **以 Windows 为主。** 文档和提示信息默认用 `py -3`，脚本本身跨平台。
 - **稿件路径请写绝对路径。** `field-config.yaml` 里的 `manuscript_tex` 和 `manuscript_tables` 请用绝对路径（一键接入就是这样写的）。只有 skill 装在 `<项目>/.claude/skills/` 下时，相对路径才按项目文件夹解析；装在别处时，脚本会停下来要求写绝对路径。
 - **部分可选步骤会用到仓库里没有的 skill 或 agent。** `<field>-lit --audit` 会调用 `humanize-auditor`，`<field>-draft` 可以分出一个 `claim-verifier`，两者默认都关闭。polish 的 f 步按仓库自带的 `references/humanizer-G.md` 做；装了 `humanizer` skill 时，也可以改用它的 G 节。各 skill 还会建议下一步用别的 skill（`/proofread`、`/review-paper`、`/verify-claims`、`/seven-pass-review`、`/audit-reproducibility`），这些都不是必需的。
-- **`<field>-polish` 还有已知的缺口。** 它第一次完整运行（2026-10-14）时找出 23 个问题，1.4.0 都已修好。修完后在同一节上再跑一次，检查全部通过，又找出 18 个问题，1.4.0 修了其中 16 个，剩下两个：
-  - `scan_appositive.py` 只列名词短语构成的尾巴，“, with no change over time” 这类尾巴要靠自己读出来；
-  - 改完后再跑一次扫描，它列出的是这一节现在有的框架，分不出哪些是这次改动带进来的。把每次的输出存下来对比。
+- **`<field>-polish` 只在一节上完整跑过。** 它第一次完整运行（2026-10-14）时找出 23 个问题，1.4.0 都已修好。修完后在同一节上再跑一次，检查全部通过，又找出 18 个问题，1.4.0 修了其中 16 个，1.4.1 修了剩下两个。两次改的都是同一个领域里的同一节文献综述。`scan_appositive.py` 只在 “, with …” 或分词尾巴收在句末时才列出；句子中间的这类尾巴要靠自己读出来。
 - **文件里的 “parent”。** 这套做法最早是为实证金融论文写作手工搭的一对 skill。那一对不在本仓库里，工厂运行也不依赖它们。文件里说的 “parent” 指的就是它们，它们的数字只作为示意出现。
 
 ## 术语表
@@ -438,14 +436,14 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 py -3 tests/run_selftest.py
 ```
 
-共 170 项检查，分六部分：
+共 172 项检查，分六部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
 3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 除 `compile.py`（它需要 TeX）以外的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
 4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
 5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
-6. 1.4.0 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
+6. 1.4.0 和 1.4.1 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep（含 `--since`）、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep、scan_appositive）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
@@ -474,6 +472,6 @@ docs/images/                README 用到的截图
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.4.0（2026-10-14）。
+MIT，见 [LICENSE](LICENSE)。版本 1.4.1（2026-10-14）。
 
 作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

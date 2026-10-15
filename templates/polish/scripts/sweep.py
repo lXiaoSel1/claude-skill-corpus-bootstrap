@@ -18,12 +18,16 @@ Frames never run across a citation or a statistic label ("OR 0.41").
 FOCUS lists what falls inside the named sections: the step's to-do list, and
 how well the corpus covers the section (cited papers in the style corpus,
 the section's key words in >= 3 papers; LOW = rule 2 often cannot be met).
+With --since <snapshot> (step a's), FOCUS marks each frame NEW (not in that
+snapshot of the section) or +k (used k more times than there), and lists the
+0-paper frames the snapshot had that the section no longer has: the rule-4
+re-run after an edit shows what the edit brought in.
 POSITIVE CONTROLS are phrases a reviewer knows should be flagged; each is
 tested against the corpus index itself, so it is judged whether or not the
 draft still contains it. A MISSED control means the sweep is not qualified.
 
 RUN
-    py -3 scripts/sweep.py [section ...] [--min-freq N] [--manuscript main.tex]
+    py -3 scripts/sweep.py [section ...] [--since <snapshot>] [--min-freq N] [--manuscript main.tex]
 Exit code 1 when a positive control is MISSED.
 """
 import re
@@ -40,8 +44,11 @@ MIN_FREQ = int(_rp._pop(args, "--min-freq", opts["sweep_min_freq"]))
 COMMON = opts["sweep_common_df"]
 VERY_COMMON = opts["sweep_very_common_df"]
 CONTROLS = opts["sweep_controls"]
+SINCE = _rp._pop(args, "--since")
 split_sentences = ctx.split_sentences()
 focus = ctx.sections(args) if args else []
+if SINCE and not focus:
+    _rp.die("--since compares sections with a snapshot: sweep.py <section> --since <snapshot>")
 
 
 def grams(ts, n):
@@ -203,6 +210,32 @@ def coverage(sec, fs):
              "  LOW (%s): rule 2 will often not be met; record it (rule 2c)" % " and ".join(why) if why else ""))
 
 
+def gram_counts(fs):
+    c = Counter()
+    for _, s in fs:
+        t = gram_toks(s)
+        for n in (2, 3, 4):
+            c.update(grams(t, n))
+    return c
+
+
+def zero_frames(c):
+    """The counted grams whose words are attested (each in >= COMMON papers)
+    and whose combination is in 0 papers."""
+    return {g for g in c if "citex" not in g.split()
+            and all(len(word_df.get(w, ())) >= COMMON for w in g.split())
+            and not gram_df[len(g.split())].get(g)}
+
+
+def since_mark(g, hits, old):
+    """NEW / +k against the --since snapshot of the section ("" without one)."""
+    if old is None:
+        return ""
+    if not old[g]:
+        return "  NEW"
+    return "  +%d" % (hits[g] - old[g]) if hits[g] > old[g] else ""
+
+
 recurring = {g for c, n, g in flagged}
 oneoff = {g for _, n, g in one_f}
 for sec in focus:
@@ -215,22 +248,44 @@ for sec in focus:
     print("FOCUS %s (%s): %d sentences · words/sentence median %d · over P90 (%d): %d"
           % (sec.key, sec.path, len(fs), wc[len(wc) // 2], P90, sum(1 for x in wc if x > P90)))
     coverage(sec, fs)
+    old = (gram_counts(_rp.para_sentences(_rp.body_lines(ctx.snapshot_lines(SINCE, sec)), split_sentences))
+           if SINCE else None)
+    marked = 0
     kept, hits, where = present(fs, recurring)
     print("  recurring 0-hit frames present (L2): %d" % len(kept))
     for g in kept:
-        print("    %d×  %s   (doc-wide ×%d; lines %s)"
-              % (hits[g], g, draft_grams[len(g.split())][g], where[g]))
+        m = since_mark(g, hits, old)
+        marked += bool(m)
+        print("    %d×  %s   (doc-wide ×%d; lines %s)%s"
+              % (hits[g], g, draft_grams[len(g.split())][g], where[g], m))
     kept, hits, where = present(fs, oneoff)
     core = [g for g in kept if is_core(g)]
     comp = [g for g in kept if not is_core(g)]
+    if old is not None:                        # the frames an edit brought in print first
+        comp.sort(key=lambda g: not since_mark(g, hits, old))
     print("  one-off 0-hit frames present (L2b): %d — core %d (read each), compositional %d"
           % (len(kept), len(core), len(comp)))
     for g in core:
-        print("    core  %s   (lines %s)" % (g, where[g]))
-    for g in comp[:20]:
-        print("          %s   (lines %s)" % (g, where[g]))
+        m = since_mark(g, hits, old)
+        marked += bool(m)
+        print("    core  %s   (lines %s)%s" % (g, where[g], m))
+    for k, g in enumerate(comp):
+        m = since_mark(g, hits, old)
+        marked += bool(m)
+        if k < 20:
+            print("          %s   (lines %s)%s" % (g, where[g], m))
     if len(comp) > 20:
         print("          ... %d more compositional frames (ordinary grammar unless idiomatic)" % (len(comp) - 20))
+    if old is not None:
+        now = gram_counts(fs)
+        gone = [g for g in zero_frames(old) if not now[g]]
+        gone = sorted(g for g in gone if not any(g != h and (" " + g + " ") in (" " + h + " ") for h in gone))
+        print("  since snapshot %s: %d frame(s) above marked NEW or +k (brought in or used more by the edits);"
+              " %d 0-paper frame(s) of the snapshot gone" % (SINCE, marked, len(gone)))
+        for g in gone[:20]:
+            print("    gone  %s" % g)
+        if len(gone) > 20:
+            print("    ... %d more gone" % (len(gone) - 20))
     vv = Counter(w for _, s in fs for w in toks(s) if w not in ("citex", "num")
                  and len(word_df.get(w, ())) <= 2 and len(w) >= 3)
     print("  vocabulary at 0-2 corpus papers: " + ", ".join(

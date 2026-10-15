@@ -2,7 +2,7 @@
 name: corpus-bootstrap
 description: "Bootstrap a new research field's writing infrastructure from the user's own downloaded papers. Stamps three skill instances — <field>-lit (style/terminology reviewer against the field's corpus), <field>-draft (paragraph drafting with evidence ledgers) and <field>-polish (section-by-section revision of the user's manuscript against the literature and the cited PDFs) — then builds their reference layers in five acceptance-gated tiers (corpus → style measurements → chapter taxonomy+map → records+Versions → exemplars). One-step onboarding takes a manuscript and a library (PDF folder, Zotero/JabRef .bib, or PDFs plus reading notes), matches every citation to its PDF, and builds Tiers 0-1 with no configuration file. Use when user says \"我要研究一个新领域\", \"把文献建成语料库\", \"用我的文献库改这篇论文\", \"bootstrap a corpus for X\", \"onboard my manuscript and library\", \"给这个领域盖一套 lit/draft skill\", \"新领域的文献库\". The user downloads the PDFs; nothing is fetched."
 author: Xuan Tang
-version: 1.4.0
+version: 1.4.1
 argument-hint: "[polish <main.tex> <library> | stamp <field> | ingest | tier <n> | status <field>]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Task"]
@@ -164,4 +164,4 @@ an instance without a manuscript is normal, not broken.
 
 ## Changelog
 
-See `CHANGELOG.md` (version 1.4.0).
+See `CHANGELOG.md` (version 1.4.1).

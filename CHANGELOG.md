@@ -1,5 +1,16 @@
 # Changelog — corpus-bootstrap
 
+- **2026-10-14 (1.4.1)** — the two gaps the polish rerun left.
+  `sweep.py <section> --since <snapshot>` marks each FOCUS frame NEW (not in
+  that snapshot of the section) or +k (used k more times) and lists the
+  0-paper frames that are gone, so the rule-4 re-run after step f shows what
+  the edits brought in. `scan_appositive.py` also lists with-absolutes and
+  participle phrases that end a sentence after a main clause, each labelled
+  with its kind, and skips prepositions such as "including" and "during"; on
+  the rerun's input it finds the two ", with …" tails the rerun had to catch
+  by hand, and all 17 of its new candidates there are real tails. Rule 5 covers
+  with-tails and says when a participle tail stays. Self-test: 170 checks
+  unchanged, 2 added.
 - **2026-10-14 (1.4.0)** — the rest of the review, the polish workflow's
   first-run problems, and parent text kept apart.
   **Polish:** steps run a → b → e → c → d → d2 → f → g, with each step's edits
