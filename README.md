@@ -167,7 +167,7 @@ The same review also turned up these problems:
 - **A first pass can be too lenient.** In the first round, all 13 section reviews passed, yet the text still used "the authors argue" 12 times (0 of the 51 papers use it), and its median sentence was 44 words long against 25 in the corpus. The review was then redone section by section under stricter rules: a full-text scan, long sentences split, and every term and framing phrase checked again.
 - **"Paper-specific, keep" needs a human check.** `-lit` kept "acute low back sprains" as Graves et al.'s own term. The paper actually says "back sprain/strain", and the final text follows the paper.
 - **Some changes remove meaning.** `-lit` once changed "fairly consistent" to "consistent" and deleted "the resulting"; both words carried meaning, and both changes were reverted.
-- **A phrase the corpus uses can still be wrong in your sentence.** In the section of Example 4, `-polish` kept "After controlling for injury severity and other factors, women were more likely than men…", because 9 papers in the corpus use "after controlling for". In this sentence it is a dangling modifier: the women did not do the controlling.
+- **A phrase the corpus uses can still be wrong in your sentence.** In the section of Example 4, `-polish` kept "After controlling for injury severity and other factors, women were more likely than men…", because 9 papers in the corpus use "after controlling for". In this sentence it is a dangling modifier: the women did not do the controlling. The corpus check covers wording, not grammar.
 
 Check numbers and findings against the source, use the `-draft` ledger to see where each claim comes from, and read every change before you accept it.
 
@@ -178,76 +178,6 @@ Check numbers and findings against the source, use the `-draft` ledger to see wh
 - Every claim in a drafted paragraph has a source line or a visible flag.
 - You supply the papers. The skill does not fetch, scrape or call any API.
 - The build stops after every tier (one-step onboarding runs Tiers 0 and 1 together), and the chapter taxonomy waits for your approval.
-
-## How it works
-
-The build runs in five tiers. Each tier ends with an acceptance gate: a `check_drift` script plus something you check by eye. The skill stops after every tier and waits for you, except during one-step onboarding (see below).
-
-| Tier | What it builds | Cost | Acceptance |
-|---|---|---|---|
-| **0 Corpus** | Text files from your PDFs; a provenance manifest (source hash, converter and version, flags for scans, short documents and encoding damage); a corpus manifest with four denominators | scripts, minutes | you review the manifest; lit `check_drift` tier 0 passes |
-| **1 Style layer** | Register measurements, cohesion norms, a transitions bank. **`<field>-lit` is usable from here** | scripts only | lit `check_drift` tier 1 passes; you read one live review |
-| **2 Chapter map** | Headings from every paper, a chapter taxonomy induced from your papers (**you approve it**), a labelled chapter map, chapter slices | 1 induction pass + about 4–8 labelling passes | ≥ 90 % agreement with a hand-checked sample; you read the taxonomy and three slices |
-| **3 Records + Versions** | Paragraph-by-paragraph reading records; per chapter, paragraph patterns attested in ≥ 2 papers. **`<field>-draft` is usable from here** | about 27 × (papers / 60) reading passes + 1 per chapter, run chapter by chapter | draft `check_drift` tier 3 passes; you read one chapter; the first paragraph is drafted |
-| **4 Exemplars** | A sentence bank tagged with 8 rhetorical moves, a verb ladder, a structure canon drafted from your field's writing guides | about 1 pass per 10 papers, plus 1 pass for the structure canon | both `check_drift` scripts pass in full |
-
-The reading passes run as Claude Code subagents with the prompts in `templates/prompts/`. The taxonomy is induced from your papers rather than assumed, because a wrong taxonomy spoils everything downstream; that is why Tier 2 stops for your approval.
-
-### One-step onboarding
-
-When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Each script prints its default decisions as a table. To change a Tier 0 decision, edit the lists in both `field-config.yaml` files and run `tier0_accept.py <field> --keep-config`; to fix the paragraph threshold, run `calibrate_paragraphs.py <field> --set N`. Without these flags, a second run works out the defaults again.
-
-| Step | Script | What it does |
-|---|---|---|
-| 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Creates the field's skills (it asks you for a name and keywords) or reuses them, and ingests the matched PDFs |
-| 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, books and manuals are used for terminology only, working papers and preprints count as research unless they are short, short research entries are excluded |
-| 3 | `calibrate_paragraphs.py` | Chooses the paragraph-length threshold for the corpus by a sweep from 80 to 400 characters |
-| 4 | `tier1_fill.py` | Builds the style layer and fills every Tier 1 number and verdict, so `check_drift` passes with no hand editing |
-| 5 | (Claude) | Reviews one paragraph of your manuscript with `<field>-lit` and shows you the result |
-| 6 | `onboard.py --finish` | Lists which `<field>-polish` steps are ready and estimates the tokens and time for Tiers 2–4, then asks before building them |
-
-### `<field>-polish`, section by section
-
-| Step | What happens | Needs |
-|---|---|---|
-| a | Snapshot the section | the manuscript |
-| b | Scan the whole manuscript against the corpus; the section's findings become the to-do list | Tier 0 |
-| c | Split long sentences; replace framing phrases with ones found in at least 3 papers | Tier 0 |
-| d | Review with `<field>-lit` and grade sentence-to-sentence cohesion | Tier 1 |
-| d2 | Check paragraph openers against how the corpus opens its paragraphs | Tier 3 |
-| e | Look up rare words and domain terms in the cited papers' PDFs | the PDFs |
-| f | Read each sentence for meaning (scope, comparisons, verb strength) | |
-| g | Confirm numbers, citation keys and source comments are unchanged; check paragraph and sentence lengths | Tier 0 |
-| h2 | Check every changed sentence against its source | the PDFs |
-| i | Compile the manuscript (0 warnings) and recount citations | TeX |
-| j | Render the section as readable text for you | a compiled `.bbl` |
-
-## Token use
-
-Tiers 0 and 1 are scripts and use almost no tokens. Tiers 2 to 4 are reading passes run by Claude subagents, and they are expensive.
-
-The figures below come from the transcripts of one real build: the instance used in the examples above, with 66 papers (51 used for style). Tiers 2 to 4 took 69 subagent runs and about 10 hours. They include the passes that had to be rerun during the build, and the main session that coordinated them.
-
-| Step | Subagent runs | Tokens processed | Of which output |
-|---|---|---|---|
-| Tier 2: taxonomy induction and heading labelling | 9 | about 21 million | about 96,000 |
-| Tier 3: PASS-1 reading | 43 | about 79 million | about 700,000 |
-| Tier 3: PASS-2 induction | 11 | about 172 million | about 77,000 |
-| Tier 4: exemplar tagging | 6 | about 44 million | about 7,000 |
-| Main session over the same hours | | about 172 million | about 390,000 |
-| **Total** | **69** | **about 490 million** | **about 1.3 million** |
-
-About 96% of the tokens processed were re-read from the prompt cache; new input was about 18 million tokens. As a rough guide, budget about 7 million tokens per paper and scale with the size of your corpus.
-
-To keep the cost under control:
-
-- Run `tier_status.py` before each tier; it prints the number of agent passes the next tier needs.
-- Build Tier 3 one chapter at a time, as the tier table says, and check your usage between chapters.
-- If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
-
-**`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. A second run on the same section, after the 1.4.0 fixes, took 114 tool calls, about 37 minutes and about 32 million tokens. One-step onboarding itself runs Tiers 0 and 1 as scripts.
-
-**Drafting the structure canon** (Tier 4) was measured on its own. One agent drafted it from the original build's 17 guides (about 152,000 words) with 101 tool calls in 14 minutes. It processed about 10 million tokens, 97% of them re-read from the prompt cache (about 0.28 million tokens of new input and output). `tier_status.py` scales this figure to the length of your guides.
 
 ## Requirements
 
@@ -277,11 +207,36 @@ The folder must be named `corpus-bootstrap`. Stamped skills are created next to 
 
 ## Quick start
 
-Run these from the skill folder. The example field is `ecology`.
+Run these from the skill folder. The example field is `ecology`. There are two ways to start.
+
+**From a manuscript and your library (recommended).** In Claude Code, say `/corpus-bootstrap polish` and give the paths; Claude runs these steps and asks before Tier 2. By hand:
 
 ```bash
 cd ~/.claude/skills/corpus-bootstrap
 
+# 1. Match every citation to its PDF, stamp the field and ingest. One line, so it works in
+#    bash, PowerShell and cmd alike (without --field it stops and asks for a name;
+#    --dry-run only builds the index; --notes is optional)
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
+
+# 2. Tier 0 acceptance, the paragraph threshold, Tier 1
+py -3 scripts/tier0_accept.py ecology
+py -3 scripts/calibrate_paragraphs.py ecology
+py -3 scripts/tier1_fill.py ecology
+
+# 3. What works now, and what Tiers 2-4 would cost
+py -3 scripts/onboard.py --finish --field ecology
+```
+
+Then revise a section with `/ecology-polish <section>`; [Using the three skills](#using-the-three-skills) shows how. To add the third skill to a field stamped before 1.2.0, run `py -3 scripts/stamp.py ecology --add polish`.
+
+Reading notes (`--notes`) are Markdown files, one per paper, named after the citation key (`Smith2019.md`). A line such as `pdf: ../pdfs/smith-2019.pdf` near the top links the note to its PDF (a relative path starts from the note's folder). Quoted sentences with their page on the same line, such as `- "medical spending rose after the reform" (p.4)`, are what the polish step e script `note_terms.py` reads. Onboarding with `--notes` also writes `<field>-draft/references/notes-index.md`, which `<field>-draft` uses to find a note for each citation.
+
+Onboarding and `<field>-polish` keep their working files in a `.polish/` folder next to your `main.tex`: the library index, snapshots and backups. Add `.polish/` to your manuscript's `.gitignore`, or leave it out of Overleaf sync.
+
+**From a folder of PDFs.** Without a manuscript, build the field from the papers alone:
+
+```bash
 # 1. Create the three skills for the field
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
@@ -303,30 +258,111 @@ Tier 1 is two more scripts: `py -3 scripts/calibrate_paragraphs.py ecology`, the
 
 `--citation-style` accepts `author-year`, `numeric` or `mixed`. `--keywords` goes into the trigger descriptions of the new skills. If you stamp with `--dest <folder>`, pass the same `--dest` to every script in `scripts/`.
 
-**Or start from a manuscript and your library.** In Claude Code, say `/corpus-bootstrap polish` and give the paths; Claude runs these steps and asks before Tier 2. By hand:
-
-```bash
-# 1. Match every citation to its PDF, stamp the field and ingest. One line, so it works in
-#    bash, PowerShell and cmd alike (without --field it stops and asks for a name;
-#    --dry-run only builds the index; --notes is optional)
-py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
-
-# 2. Tier 0 acceptance, the paragraph threshold, Tier 1
-py -3 scripts/tier0_accept.py ecology
-py -3 scripts/calibrate_paragraphs.py ecology
-py -3 scripts/tier1_fill.py ecology
-
-# 3. What works now, and what Tiers 2-4 would cost
-py -3 scripts/onboard.py --finish --field ecology
-```
-
-Then revise a section with `/ecology-polish <section>`. `py -3 ../ecology-polish/scripts/doctor.py` lists the manuscript's sections and the steps that are ready. To add the third skill to a field stamped before 1.2.0, run `py -3 scripts/stamp.py ecology --add polish`.
-
-Reading notes (`--notes`) are Markdown files, one per paper, named after the citation key (`Smith2019.md`). A line such as `pdf: ../pdfs/smith-2019.pdf` near the top links the note to its PDF (a relative path starts from the note's folder). Quoted sentences with their page on the same line, such as `- "medical spending rose after the reform" (p.4)`, are what the polish step e script `note_terms.py` reads. Onboarding with `--notes` also writes `<field>-draft/references/notes-index.md`, which `<field>-draft` uses to find a note for each citation.
-
-Onboarding and `<field>-polish` keep their working files in a `.polish/` folder next to your `main.tex`: the library index, snapshots and backups. Add `.polish/` to your manuscript's `.gitignore`, or leave it out of Overleaf sync.
-
 **You download the papers yourself.** The skill does not fetch, scrape or call any API. Keep your PDFs and corpus text out of any public repository.
+
+## Using the three skills
+
+Each stamped skill is a slash command in Claude Code, available once its tier is built. The examples use the field `ecology`.
+
+### `/ecology-lit`: review a passage
+
+It works from Tier 1. Give it a file path or paste the passage, for example `/ecology-lit sections/intro.tex`. It returns the passage with the style fixed, followed by:
+
+- a `TERMS` block: every domain term, with its corpus count and a quoted line;
+- a `REGISTER` block: one row per rule, including the rules that found nothing;
+- a `JOINS` table for passages of three or more sentences: how each sentence connects to the one before it;
+- the changes, each with its reason, and what it leaves to you.
+
+It writes nothing to your manuscript until you say "place it"; the only file it updates on its own is its term cache. `--audit` adds a second review in a fresh context by a `humanize-auditor` agent, if you have one installed.
+
+### `/ecology-draft`: draft one paragraph
+
+It works from Tier 3, in the chapters Tier 3 has built. Name the section and the paragraph, and say what the paragraph must say, for example `/ecology-draft introduction ¶3` followed by its point. It picks one Version and names one or two alternatives, fills the claim ledger, drafts the paragraph and stops. You place the paragraph in your manuscript yourself: the skill writes only `references/manuscript-state.md`, its record of the Versions and source lines this manuscript has used.
+
+Two more modes:
+
+- `--outline <section>`: before you write, one sentence per planned paragraph with a candidate Version; after you write, a one-sentence summary of each paragraph and where the argument breaks.
+- `--trace <section|abstract>`: each sentence with a number or a comparison, traced to the table, figure or section that supports it; and each promise in the introduction or abstract, traced to the section that delivers it.
+
+What they need:
+
+- `manuscript_tex` in `ecology-draft/references/field-config.yaml`. Onboarding writes it; if you built the field from a folder of PDFs, set it to your `main.tex` by hand. `--outline` on a written section reads the section from it.
+- For `--trace`, the evidence map `references/evidence-map.md`. Build it with `py -3 ../ecology-draft/scripts/build_evidence_map.py`, and again after the manuscript changes (`--check` says whether it is stale). It indexes sections and figures from `main.tex` and the files it `\input`s, and tables from the folder set as `manuscript_tables` (the `.tex` files there with a `\label{tab:…}`). If your tables are separate files, set that folder too.
+- For source lines from your own reading notes, onboard with `--notes`, which writes `references/notes-index.md`. Without notes, `-draft` pastes source lines from the corpus text.
+
+### `/ecology-polish <section>`: revise a section
+
+It works on a LaTeX manuscript. A full run needs Tier 1; step d2 also needs Tier 3, and without it the step is skipped and named in the record. Start with `py -3 ../ecology-polish/scripts/doctor.py`, which lists the manuscript's sections and the steps that are ready. The steps run in this order:
+
+| Step | What happens | Needs |
+|---|---|---|
+| a | Snapshot the section and record the baseline counts | the manuscript |
+| b | Scan the whole manuscript against the corpus; the section's findings become the to-do list | Tier 0 |
+| e | Look up rare words and domain terms in the cited papers' PDFs | the PDFs |
+| c | Split long sentences; replace framing phrases with ones found in at least 3 papers | Tier 0 |
+| d | Review with `<field>-lit` and grade sentence-to-sentence cohesion | Tier 1 |
+| d2 | Check paragraph openers against how the corpus opens its paragraphs | Tier 3 |
+| f | Read each sentence for meaning (scope, comparisons, verb strength) | |
+| g | Confirm numbers, citation keys and source comments are unchanged; check paragraph and sentence lengths | Tier 0 |
+| h2 | Check every changed sentence against its source | the PDFs |
+| i | Compile the manuscript (0 warnings) and recount citations | TeX |
+| j | Render the section as readable text for you | a compiled `.bbl` |
+
+Every step that changes the text writes its edits with `rep.py` after the snapshot, and the section's record goes to `.polish/records/<section>.md`. The skill shows you the first one or two sections and waits; say "batch" (or pass `--batch`) and it continues without stopping.
+
+## How it works
+
+The build runs in five tiers. Each tier ends with an acceptance gate: a `check_drift` script plus something you check by eye. The skill stops after every tier and waits for you, except during one-step onboarding (see below).
+
+| Tier | What it builds | Cost | Acceptance |
+|---|---|---|---|
+| **0 Corpus** | Text files from your PDFs; a provenance manifest (source hash, converter and version, flags for scans, short documents and encoding damage); a corpus manifest with four denominators | scripts, minutes | you review the manifest; lit `check_drift` tier 0 passes |
+| **1 Style layer** | Register measurements, cohesion norms, a transitions bank. **`<field>-lit` is usable from here** | scripts only | lit `check_drift` tier 1 passes; you read one live review |
+| **2 Chapter map** | Headings from every paper, a chapter taxonomy induced from your papers (**you approve it**), a labelled chapter map, chapter slices | 1 induction pass + about 4–8 labelling passes | you hand-check the headings of about 10 papers (the recall gate) and a sample of the chapter map, which must agree ≥ 90 %; you read the taxonomy and three slices |
+| **3 Records + Versions** | Paragraph-by-paragraph reading records; per chapter, paragraph patterns attested in ≥ 2 papers. **`<field>-draft` is usable from here** | about 27 × (style-safe papers / 60) reading passes + 1 per chapter, run chapter by chapter | draft `check_drift` tier 3 passes; you read one chapter; the first paragraph is drafted |
+| **4 Exemplars** | A sentence bank tagged with 8 rhetorical moves, a verb ladder, a structure canon drafted from your field's writing guides | about 1 pass per 10 papers, plus 1 pass for the structure canon | both `check_drift` scripts pass in full |
+
+The reading passes run as Claude Code subagents with the prompts in `templates/prompts/`. The taxonomy is induced from your papers rather than assumed, because a wrong taxonomy spoils everything downstream; that is why Tier 2 stops for your approval.
+
+### One-step onboarding
+
+When you start from a manuscript, `/corpus-bootstrap polish` runs these scripts in order. Each script prints its default decisions as a table. To change a Tier 0 decision, edit the lists in both `field-config.yaml` files and run `tier0_accept.py <field> --keep-config`; to fix the paragraph threshold, run `calibrate_paragraphs.py <field> --set N`. Without these flags, a second run works out the defaults again.
+
+| Step | Script | What it does |
+|---|---|---|
+| 1 | `onboard.py` | Reads the manuscript (sections, citation keys, `.bib`, citation aliases) and matches each cited key to a PDF: the `.bib` `file` field, a reading note's PDF field, a PDF named after the key, then the DOI, the title, or first author and year. Reports keys with no PDF, keys with several candidates, duplicate versions and PDFs that are not in English. Creates the field's skills (it asks you for a name and keywords) or reuses them, and ingests the matched PDFs |
+| 2 | `tier0_accept.py` | Tier 0 with default decisions: scans and failed conversions are excluded, books and manuals are used for terminology only, working papers and preprints count as research unless they are short, short research entries are excluded |
+| 3 | `calibrate_paragraphs.py` | Chooses the paragraph-length threshold for the corpus by a sweep from 80 to 400 characters |
+| 4 | `tier1_fill.py` | Builds the style layer and fills every Tier 1 number and verdict, so `check_drift` passes with no hand editing |
+| 5 | (Claude) | Reviews one paragraph of your manuscript with `<field>-lit` and shows you the result |
+| 6 | `onboard.py --finish` | Lists which `<field>-polish` steps are ready and estimates the tokens and time for Tiers 2–4, then asks before building them |
+
+## Token use
+
+Tiers 0 and 1 are scripts and use almost no tokens. Tiers 2 to 4 are reading passes run by Claude subagents, and they are expensive.
+
+The figures below come from the transcripts of one real build: the instance used in the examples above, with 66 papers (51 used for style). Tiers 2 to 4 took 69 subagent runs and about 10 hours. They include the passes that had to be rerun during the build, and the main session that coordinated them.
+
+| Step | Subagent runs | Tokens processed | Of which output |
+|---|---|---|---|
+| Tier 2: taxonomy induction and heading labelling | 9 | about 21 million | about 96,000 |
+| Tier 3: PASS-1 reading | 43 | about 79 million | about 700,000 |
+| Tier 3: PASS-2 induction | 11 | about 172 million | about 77,000 |
+| Tier 4: exemplar tagging | 6 | about 44 million | about 7,000 |
+| Main session over the same hours | | about 172 million | about 390,000 |
+| **Total** | **69** | **about 490 million** | **about 1.3 million** |
+
+About 96% of the tokens processed were re-read from the prompt cache; new input was about 18 million tokens. As a rough guide, budget about 9.6 million tokens per style-safe paper (the papers used for style checks; 490 million over 51 papers here). `tier_status.py` scales its estimate the same way.
+
+To keep the cost under control:
+
+- Run `tier_status.py` before each tier; it prints the number of agent passes the next tier needs.
+- Build Tier 3 one chapter at a time, as the tier table says, and check your usage between chapters.
+- If you only need the reviewer, you can stop after Tier 1: `<field>-lit` works from there.
+
+**`<field>-polish` costs tokens per section, too.** Revising the 15-sentence section of Example 4 with steps a–j took one subagent 108 tool calls and about 34 minutes. It processed about 30 million tokens, 98% of them re-read from the prompt cache (about 0.5 million tokens of new input and output). Most of the work was corpus lookups for about 160 candidate phrases and checking each changed sentence against the PDFs. A second run on the same section, after the 1.4.0 fixes, took 114 tool calls, about 37 minutes and about 32 million tokens. One-step onboarding itself runs Tiers 0 and 1 as scripts.
+
+**Drafting the structure canon** (Tier 4) was measured on its own. One agent drafted it from the original build's 17 guides (about 152,000 words) with 101 tool calls in 14 minutes. It processed about 10 million tokens, 97% of them re-read from the prompt cache (about 0.28 million tokens of new input and output). `tier_status.py` scales this figure to the length of your guides.
 
 ## Writing guides for Tier 4
 
@@ -362,23 +398,6 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 2. At Tier 4, record the number of guide files and at least three verbatim spot quotes (fewer only when you have fewer guides) under `canon_sources` in the `-draft` skill's `references/registry.json`, keyed by file: `"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "a sentence copied from that file"}}`. `check_drift` searches for each quote in its file.
 3. Write the field's `structure-canon.md`, quoting the guides by `<key>.txt:line`. You can start from the skeleton in `templates/draft/references/`. `check_drift` also requires the file to mention `canon-sources` and to carry `TO-MEASURE` tags for rules not yet measured, and `check_canon_quotes.py` checks the quotes.
 
-## Self-test
-
-```bash
-py -3 tests/run_selftest.py
-```
-
-The self-test runs 170 checks in six parts:
-
-1. Unit tests of the template scripts.
-2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
-3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script except `compile.py` (which needs TeX) runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
-4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
-5. The inputs that broke 1.3.0: biblatex citations, field names and keywords that used to break stamping, a folder with brackets, an upper-case `.PDF`, an interrupted ingest, working papers at Tier 0, an empty Tier 3 registry, and writing guides with no PDF converter available.
-6. The 1.4.0 changes: parent names and numbers left unlabelled in the templates, unpaired parent markers, every changed polish script (sweep, cohesion_loop, opener_check, sent_diff, trial_diff, counts, compile, source_term_check, pdf_ctx, note_terms, rep), `attest.py` on a phrase found only through other forms of its last word, and the draft and lit scripts no earlier part ran (draftcheck, state, build_evidence_map, build_exemplars, cache).
-
-It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
-
 ## Troubleshooting
 
 - **A paper is flagged SCAN, SHORT or INTERLEAVED.** SCAN means the PDF has no text layer: OCR it and ingest it again, or leave it excluded. SHORT often means only an abstract or a landing page was saved: download the full paper. INTERLEAVED means two columns were read across each other: run `ingest.py` again with the same `--src` or `--map` plus `--force KEY --converter pymupdf` (`tier0_accept.py` does this for you when PyMuPDF is installed).
@@ -400,6 +419,37 @@ It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary fo
   - `scan_appositive.py` lists noun-phrase tails only, so a tail such as ", with no change over time" has to be found by reading;
   - when the sweep runs again after your edits, it lists the frames now in the section, not which ones the edits added. Save each run's output and compare them.
 - **"The parent" in the files.** The recipe was first built by hand as a pair of skills for empirical finance writing. Those skills are not part of this repository, and the factory does not need them. Where the files say "the parent", they mean that original pair, and its numbers appear only as illustrations.
+
+## Glossary
+
+- **Tier.** One stage of the build: 0 corpus, 1 style layer, 2 chapter map, 3 records and Versions, 4 exemplars. Each ends with an acceptance gate, and the registries list the tiers that are built (`built_tiers`).
+- **`check_drift`.** The consistency check that each `-lit` and `-draft` skill carries (`scripts/check_drift.py`). It checks the built tiers' files and numbers against each other and exits with code 1 when any check fails.
+- **Style-safe papers.** The research papers used for style measurements: the corpus without duplicates, damaged text, short documents and documents that are not research. Terminology checks use a wider set (terminology-safe).
+- **Registry.** `references/registry.json` in each skill: the built tiers and the counts the checks compare against.
+- **PASS-1, PASS-2.** Tier 3's two reading passes. PASS-1 reads one chapter of each paper paragraph by paragraph and writes plain-language records; PASS-2 reads all the records of a chapter and induces its Versions.
+- **Version.** A way of writing a paragraph for one job in one chapter, attested in at least two papers: its pattern, when to use it and when not, and the papers that use it. Every `-draft` paragraph follows one.
+- **L1, L2, L2b.** Layers of the `-polish` sweep. L1 lists words in no corpus paper (L1b, in one or two); L2, recurring frames of two to four common words whose combination is in no paper; L2b, one-off frames of very common words in no paper, split into core frames, which you read, and compositional ones.
+- **PARENT-BLOCK, PARENT-EXAMPLE.** Markers in the templates. A PARENT-BLOCK holds the original build's text that a tier must replace with this field's measurements; a PARENT-EXAMPLE holds a worked example from the original build, kept as an illustration.
+- **The parent.** The original pair of skills, built by hand for empirical finance writing (see [Known limitations](#known-limitations)).
+
+## Self-test and contributing
+
+```bash
+py -3 tests/run_selftest.py
+```
+
+The self-test runs 170 checks in six parts:
+
+1. Unit tests of the template scripts.
+2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
+3. An onboarding run. A fixture library (PDFs, a `.bib` with `file` fields, reading notes) and a manuscript that `\input`s two sections go through onboarding to Tier 1. Then every `<field>-polish` script except `compile.py` (which needs TeX) runs on the manuscript; the checks include a word broken across a PDF line and a single-file manuscript.
+4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
+5. The inputs that broke 1.3.0: biblatex citations, field names and keywords that used to break stamping, a folder with brackets, an upper-case `.PDF`, an interrupted ingest, working papers at Tier 0, an empty Tier 3 registry, and writing guides with no PDF converter available.
+6. The 1.4.0 changes: parent names and numbers left unlabelled in the templates, unpaired parent markers, every changed polish script (sweep, cohesion_loop, opener_check, sent_diff, trial_diff, counts, compile, source_term_check, pdf_ctx, note_terms, rep), `attest.py` on a phrase found only through other forms of its last word, and the draft and lit scripts no earlier part ran (draftcheck, state, build_evidence_map, build_exemplars, cache).
+
+It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
+
+To report a problem or send a change, see [CONTRIBUTING.md](CONTRIBUTING.md). A change must keep the self-test at `0 failed`, and a bug fix should add a check that fails without it.
 
 ## Repository layout
 

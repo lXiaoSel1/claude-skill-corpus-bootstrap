@@ -179,76 +179,6 @@ Male workers were 43\% more likely than female workers to receive an MRI within 
 - 论文由你提供。这个 skill 不抓取、不爬网页，也不调用任何 API。
 - 每过一关都会停下来（一键接入时第 0、1 关连着跑完），章节分类要等你批准。
 
-## 工作方式
-
-搭建分五关进行。每一关结束都有验收：一个 `check_drift` 脚本，加上一项需要你亲自看的检查。每过一关，skill 都会停下来等你确认（一键接入例外，见下文）。
-
-| 关 | 产出 | 成本 | 验收 |
-|---|---|---|---|
-| **0 语料** | 把 PDF 转成文本；来源清单（源文件哈希、转换器及版本，并标出扫描件、短文档和编码损坏）；四种口径的语料清单 | 脚本，几分钟 | 你审阅清单；lit 的 `check_drift` 第 0 关通过 |
-| **1 文风层** | 文风测量、衔接常模、过渡语库。**从这一关起 `<field>-lit` 可以用了** | 只跑脚本 | lit 的 `check_drift` 第 1 关通过；你读一次实际审查结果 |
-| **2 章节图** | 每篇论文的标题；从你的论文里归纳出的章节分类（**需要你批准**）；标注好的章节图；按章切片 | 1 轮归纳 + 约 4–8 轮标注 | 与人工核对的样本一致率 ≥ 90%；你读分类表和 3 个切片 |
-| **3 阅读记录与 Version** | 逐段阅读记录；每章至少有 2 篇论文佐证的段落结构。**从这一关起 `<field>-draft` 可以用了** | 约 27 ×（论文数 / 60）轮阅读，加每章 1 轮，逐章进行 | draft 的 `check_drift` 第 3 关通过；你读一整章；起草出第一段 |
-| **4 例句库** | 按 8 种修辞动作标注的例句库、动词阶梯、从本领域写作指南起草的结构准则 | 每 10 篇约 1 轮，结构准则另需 1 轮 | 两个 `check_drift` 全部通过 |
-
-这几轮阅读由 Claude Code 的子代理执行，提示词在 `templates/prompts/` 里。章节分类从你的论文里归纳，不预设。分类一旦错了，后面全部白做，所以第 2 关会停下来等你批准。
-
-### 一键接入
-
-从一份稿件开始时，`/corpus-bootstrap polish` 会依次运行下面的脚本。每个默认决定都会列成表打印出来。要改第 0 关的决定，先改两份 `field-config.yaml` 里的清单，再运行 `tier0_accept.py <field> --keep-config`；要定死段落阈值，运行 `calibrate_paragraphs.py <field> --set N`。不加这两个参数直接重跑，会重新算出默认值。
-
-| 步 | 脚本 | 做什么 |
-|---|---|---|
-| 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的引用、有多个候选的引用、重复的版本和不是英文的 PDF。生成这个领域的 skill（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
-| 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，书和手册只用于查术语，工作论文和预印本算作研究论文（篇幅很短的除外），篇幅很短的研究条目排除 |
-| 3 | `calibrate_paragraphs.py` | 在 80 到 400 个字符之间扫描，选出这份语料的段落长度阈值 |
-| 4 | `tier1_fill.py` | 建好文风层，并填上第 1 关要求的所有数字和判定，`check_drift` 不用手改就能通过 |
-| 5 | （Claude） | 用 `<field>-lit` 审你稿件里的一段，把结果给你看 |
-| 6 | `onboard.py --finish` | 列出 `<field>-polish` 哪些步骤已经能用，估算第 2–4 关的 token 和时间，再问你要不要继续搭 |
-
-### `<field>-polish`：逐节改稿
-
-| 步 | 做什么 | 需要 |
-|---|---|---|
-| a | 给这一节存快照 | 稿件 |
-| b | 对照语料扫描全文，这一节查出的问题就是待办清单 | 第 0 关 |
-| c | 拆长句；把框架句换成至少 3 篇论文用过的说法 | 第 0 关 |
-| d | 用 `<field>-lit` 审稿，并给句间衔接打分 | 第 1 关 |
-| d2 | 对照语料里各段的开头方式检查段首句 | 第 3 关 |
-| e | 到被引论文的 PDF 里查少见的词和领域术语 | PDF |
-| f | 逐句读意思（范围、比较、动词强弱） | |
-| g | 确认数字、引用 key 和出处注释没变；检查段长和句长 | 第 0 关 |
-| h2 | 把每一句改过的论断对回原文 | PDF |
-| i | 编译稿件，要求 0 个警告；重新清点引用 | TeX |
-| j | 把这一节渲染成可读文本给你看 | 编译出的 `.bbl` |
-
-## Token 用量
-
-第 0、1 关只跑脚本，几乎不用 token。第 2 到 4 关要由 Claude 子代理逐篇阅读，非常耗 token。
-
-下面的数字来自一次真实搭建的会话记录，也就是上面例子用的那个领域实例：66 篇论文，其中 51 篇用于文风判断。第 2 到 4 关共跑了 69 个子代理，用时约 10 小时。数字里包括搭建中途需要重跑的几轮，以及负责调度的主会话。
-
-| 步骤 | 子代理数 | 处理的 token | 其中输出 |
-|---|---|---|---|
-| 第 2 关：归纳章节分类、标注标题 | 9 | 约 2,100 万 | 约 9.6 万 |
-| 第 3 关：PASS-1 阅读 | 43 | 约 7,900 万 | 约 70 万 |
-| 第 3 关：PASS-2 归纳 | 11 | 约 1.72 亿 | 约 7.7 万 |
-| 第 4 关：例句标注 | 6 | 约 4,400 万 | 约 7,000 |
-| 同一时段的主会话 | | 约 1.72 亿 | 约 39 万 |
-| **合计** | **69** | **约 4.9 亿** | **约 130 万** |
-
-处理的 token 里约 96% 是从提示缓存里重复读取的，新输入约 1,800 万。粗略估算，每篇论文按约 700 万 token 计，再按你的语料规模放大或缩小。
-
-控制用量的办法：
-
-- 每关开始前先跑 `tier_status.py`，它会给出下一关需要多少轮子代理。
-- 第 3 关按工作方式表里说的逐章做，每做完一章看一下用量。
-- 如果只需要审稿功能，做完第 1 关就可以停：`<field>-lit` 从那时起就能用。
-
-**`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。1.4.0 修完后在同一节上再跑一次，用了 114 次工具调用、约 37 分钟、约 3,200 万 token。一键接入本身的第 0、1 关只跑脚本。
-
-**起草结构准则**（第 4 关）单独测过一次。一个子代理用最初那次搭建的 17 篇指南（约 15.2 万词）起草，调用了 101 次工具，用时 14 分钟，处理约 1,000 万 token，其中 97% 是从提示缓存里重复读取的（新输入加输出约 28 万）。`tier_status.py` 会按你的指南长度换算这个数。
-
 ## 依赖
 
 - Claude Code（几轮阅读要用子代理）
@@ -277,11 +207,36 @@ git clone https://github.com/lXiaoSel1/claude-skill-corpus-bootstrap "$HOME/.cla
 
 ## 快速开始
 
-以下命令都在 skill 文件夹里运行，示例领域是 `ecology`。
+以下命令都在 skill 文件夹里运行，示例领域是 `ecology`。有两种开始方式。
+
+**从一份稿件和你的文献库开始（推荐）。** 在 Claude Code 里说 `/corpus-bootstrap polish` 并给出路径，Claude 会依次跑下面几步，到第 2 关之前先问你。手动运行：
 
 ```bash
 cd ~/.claude/skills/corpus-bootstrap
 
+# 1. 把每个引用对到 PDF，生成这个领域的 skill 并导入语料。写成一行，
+#    bash、PowerShell、cmd 里都能用（不加 --field 会停下来问领域名；
+#    --dry-run 只建索引；--notes 可以不给）
+py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
+
+# 2. 第 0 关验收、段落阈值、第 1 关
+py -3 scripts/tier0_accept.py ecology
+py -3 scripts/calibrate_paragraphs.py ecology
+py -3 scripts/tier1_fill.py ecology
+
+# 3. 现在能用什么，第 2-4 关要花多少
+py -3 scripts/onboard.py --finish --field ecology
+```
+
+之后用 `/ecology-polish <章节>` 改一节，用法见 [三个 skill 怎么用](#三个-skill-怎么用)。1.2.0 之前生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
+
+阅读笔记（`--notes`）是 Markdown 文件，每篇论文一个，文件名用引用 key（`Smith2019.md`）。在开头附近写一行 `pdf: ../pdfs/smith-2019.pdf`，就把笔记和 PDF 对上了（相对路径从笔记所在的文件夹算起）。polish 第 e 步的 `note_terms.py` 读的是同一行带页码的引文，例如 `- "medical spending rose after the reform" (p.4)`。带 `--notes` 一键接入时，还会写出 `<field>-draft/references/notes-index.md`，`<field>-draft` 靠它给每条引用找到笔记。
+
+一键接入和 `<field>-polish` 会把工作文件放在 `main.tex` 旁边的 `.polish/` 文件夹里：文献索引、快照和备份。请把 `.polish/` 加进稿件的 `.gitignore`，或者不让它同步到 Overleaf。
+
+**从一个 PDF 文件夹开始。** 没有稿件时，只用论文搭建这个领域：
+
+```bash
 # 1. 为这个领域生成三个 skill
 py -3 scripts/stamp.py ecology --citation-style author-year --keywords "population ecology, habitat loss"
 
@@ -303,30 +258,111 @@ py -3 scripts/tier_status.py ecology
 
 `--citation-style` 可选 `author-year`、`numeric` 或 `mixed`。`--keywords` 会写进新 skill 的触发说明。如果生成时用了 `--dest <文件夹>`，之后 `scripts/` 里的每个脚本都要带上同样的 `--dest`。
 
-**也可以从一份稿件和你的文献库开始。** 在 Claude Code 里说 `/corpus-bootstrap polish` 并给出路径，Claude 会依次跑下面几步，到第 2 关之前先问你。手动运行：
-
-```bash
-# 1. 把每个引用对到 PDF，生成这个领域的 skill 并导入语料。写成一行，
-#    bash、PowerShell、cmd 里都能用（不加 --field 会停下来问领域名；
-#    --dry-run 只建索引；--notes 可以不给）
-py -3 scripts/onboard.py --manuscript /path/to/paper/main.tex --library /path/to/pdfs --library /path/to/library.bib --notes /path/to/notes --field ecology --keywords "population ecology, habitat loss"
-
-# 2. 第 0 关验收、段落阈值、第 1 关
-py -3 scripts/tier0_accept.py ecology
-py -3 scripts/calibrate_paragraphs.py ecology
-py -3 scripts/tier1_fill.py ecology
-
-# 3. 现在能用什么，第 2-4 关要花多少
-py -3 scripts/onboard.py --finish --field ecology
-```
-
-之后用 `/ecology-polish <章节>` 改一节。`py -3 ../ecology-polish/scripts/doctor.py` 会列出稿件的章节和已经能用的步骤。1.2.0 之前生成的领域，可以用 `py -3 scripts/stamp.py ecology --add polish` 补上第三个 skill。
-
-阅读笔记（`--notes`）是 Markdown 文件，每篇论文一个，文件名用引用 key（`Smith2019.md`）。在开头附近写一行 `pdf: ../pdfs/smith-2019.pdf`，就把笔记和 PDF 对上了（相对路径从笔记所在的文件夹算起）。polish 第 e 步的 `note_terms.py` 读的是同一行带页码的引文，例如 `- "medical spending rose after the reform" (p.4)`。带 `--notes` 一键接入时，还会写出 `<field>-draft/references/notes-index.md`，`<field>-draft` 靠它给每条引用找到笔记。
-
-一键接入和 `<field>-polish` 会把工作文件放在 `main.tex` 旁边的 `.polish/` 文件夹里：文献索引、快照和备份。请把 `.polish/` 加进稿件的 `.gitignore`，或者不让它同步到 Overleaf。
-
 **论文由你自己下载。** 这个 skill 不抓取、不爬网页，也不调用任何 API。请不要把 PDF 和语料文本放进公开仓库。
+
+## 三个 skill 怎么用
+
+生成的每个 skill 都是 Claude Code 里的一个斜杠命令，对应的关建好后就能用。下面的例子用 `ecology` 这个领域。
+
+### `/ecology-lit`：审一段文字
+
+第 1 关建好后可用。给它一个文件路径，或者直接贴上那段文字，例如 `/ecology-lit sections/intro.tex`。它返回改好文风的文字，后面附上：
+
+- `TERMS` 块：每个领域术语一行，写明语料计数，并引一句原文；
+- `REGISTER` 块：每条文风规则一行，没查出问题的规则也列出来；
+- `JOINS` 表（三句以上的文字才有）：每一句和上一句怎么衔接；
+- 改动清单，每处都写明理由，以及留给你决定的问题。
+
+你说 "place it" 之前，它不会往稿件里写任何东西；它自己只更新术语缓存。`--audit` 会再请一个 `humanize-auditor` 子代理在全新的上下文里审一遍（需要你装了这个 agent）。
+
+### `/ecology-draft`：起草一段
+
+第 3 关建好后可用，只能写第 3 关已经建好的章节。告诉它要写哪一节的第几段、这一段要说什么，例如 `/ecology-draft introduction ¶3`，后面跟上这一段的要点。它选定一个 Version，另外提一两个备选，填好论断台账，起草这一段，然后停下。段落由你自己放进稿件：它只写 `references/manuscript-state.md`，记下这份稿件用过的 Version 和出处原句。
+
+另外两种用法：
+
+- `--outline <章节>`：动笔前，给每个计划中的段落写一句话，并标上候选 Version；写完后，用一句话概括每一段，并指出论证在哪里断开。
+- `--trace <章节|abstract>`：把每个带数字或比较的句子追溯到支撑它的表格、图或章节；再把引言或摘要里的每个承诺追溯到兑现它的章节。
+
+它们需要：
+
+- `ecology-draft/references/field-config.yaml` 里的 `manuscript_tex`。一键接入会写好；如果你是从 PDF 文件夹搭的领域，请手动填上你的 `main.tex`。对写好的章节做 `--outline` 时，从这里读章节。
+- `--trace` 还需要证据索引 `references/evidence-map.md`。用 `py -3 ../ecology-draft/scripts/build_evidence_map.py` 生成，稿件改过后再生成一次（加 `--check` 会告诉你是否过期）。它从 `main.tex` 和它 `\input` 的文件里索引章节和图，从 `manuscript_tables` 指定的文件夹里索引表格（其中带 `\label{tab:…}` 的 `.tex` 文件）；表格是单独文件时，请把这个文件夹也填上。
+- 想从自己的阅读笔记里贴出处原句，就在一键接入时带上 `--notes`，它会写出 `references/notes-index.md`；没有笔记时，`-draft` 从语料文本里贴原句。
+
+### `/ecology-polish <章节>`：改一节
+
+适用于 LaTeX 稿件。完整运行需要第 1 关；d2 步还需要第 3 关，没有时这一步会跳过，并在记录里写明。先运行 `py -3 ../ecology-polish/scripts/doctor.py`，它会列出稿件的章节和已经能用的步骤。各步按下面的顺序运行：
+
+| 步 | 做什么 | 需要 |
+|---|---|---|
+| a | 给这一节存快照，并记下基线计数 | 稿件 |
+| b | 对照语料扫描全文，这一节查出的问题就是待办清单 | 第 0 关 |
+| e | 到被引论文的 PDF 里查少见的词和领域术语 | PDF |
+| c | 拆长句；把框架句换成至少 3 篇论文用过的说法 | 第 0 关 |
+| d | 用 `<field>-lit` 审稿，并给句间衔接打分 | 第 1 关 |
+| d2 | 对照语料里各段的开头方式检查段首句 | 第 3 关 |
+| f | 逐句读意思（范围、比较、动词强弱） | |
+| g | 确认数字、引用 key 和出处注释没变；检查段长和句长 | 第 0 关 |
+| h2 | 把每一句改过的论断对回原文 | PDF |
+| i | 编译稿件，要求 0 个警告；重新清点引用 | TeX |
+| j | 把这一节渲染成可读文本给你看 | 编译出的 `.bbl` |
+
+会改动文字的步骤都在存过快照之后用 `rep.py` 写入，每一节的记录写在 `.polish/records/<章节>.md`。前一两节改完后它会停下来给你看；你说 "batch"（或加 `--batch`），它就一直做下去，不再停。
+
+## 工作方式
+
+搭建分五关进行。每一关结束都有验收：一个 `check_drift` 脚本，加上一项需要你亲自看的检查。每过一关，skill 都会停下来等你确认（一键接入例外，见下文）。
+
+| 关 | 产出 | 成本 | 验收 |
+|---|---|---|---|
+| **0 语料** | 把 PDF 转成文本；来源清单（源文件哈希、转换器及版本，并标出扫描件、短文档和编码损坏）；四种口径的语料清单 | 脚本，几分钟 | 你审阅清单；lit 的 `check_drift` 第 0 关通过 |
+| **1 文风层** | 文风测量、衔接常模、过渡语库。**从这一关起 `<field>-lit` 可以用了** | 只跑脚本 | lit 的 `check_drift` 第 1 关通过；你读一次实际审查结果 |
+| **2 章节图** | 每篇论文的标题；从你的论文里归纳出的章节分类（**需要你批准**）；标注好的章节图；按章切片 | 1 轮归纳 + 约 4–8 轮标注 | 你手工核对约 10 篇论文的标题（召回门槛），再抽查一部分章节图，一致率要 ≥ 90%；你读分类表和 3 个切片 |
+| **3 阅读记录与 Version** | 逐段阅读记录；每章至少有 2 篇论文佐证的段落结构。**从这一关起 `<field>-draft` 可以用了** | 约 27 ×（文风样本篇数 / 60）轮阅读，加每章 1 轮，逐章进行 | draft 的 `check_drift` 第 3 关通过；你读一整章；起草出第一段 |
+| **4 例句库** | 按 8 种修辞动作标注的例句库、动词阶梯、从本领域写作指南起草的结构准则 | 每 10 篇约 1 轮，结构准则另需 1 轮 | 两个 `check_drift` 全部通过 |
+
+这几轮阅读由 Claude Code 的子代理执行，提示词在 `templates/prompts/` 里。章节分类从你的论文里归纳，不预设。分类一旦错了，后面全部白做，所以第 2 关会停下来等你批准。
+
+### 一键接入
+
+从一份稿件开始时，`/corpus-bootstrap polish` 会依次运行下面的脚本。每个默认决定都会列成表打印出来。要改第 0 关的决定，先改两份 `field-config.yaml` 里的清单，再运行 `tier0_accept.py <field> --keep-config`；要定死段落阈值，运行 `calibrate_paragraphs.py <field> --set N`。不加这两个参数直接重跑，会重新算出默认值。
+
+| 步 | 脚本 | 做什么 |
+|---|---|---|
+| 1 | `onboard.py` | 读稿件（章节、引用 key、`.bib`、引用简称），把每个引用 key 对到 PDF：依次看 `.bib` 的 `file` 字段、阅读笔记里的 PDF 字段、以 key 命名的 PDF，再按 DOI、标题、第一作者加年份找。列出找不到 PDF 的引用、有多个候选的引用、重复的版本和不是英文的 PDF。生成这个领域的 skill（第一次会问你领域名和主题词）或沿用已有领域，并导入对上的 PDF |
+| 2 | `tier0_accept.py` | 按默认决定完成第 0 关：扫描件和转换失败的排除，书和手册只用于查术语，工作论文和预印本算作研究论文（篇幅很短的除外），篇幅很短的研究条目排除 |
+| 3 | `calibrate_paragraphs.py` | 在 80 到 400 个字符之间扫描，选出这份语料的段落长度阈值 |
+| 4 | `tier1_fill.py` | 建好文风层，并填上第 1 关要求的所有数字和判定，`check_drift` 不用手改就能通过 |
+| 5 | （Claude） | 用 `<field>-lit` 审你稿件里的一段，把结果给你看 |
+| 6 | `onboard.py --finish` | 列出 `<field>-polish` 哪些步骤已经能用，估算第 2–4 关的 token 和时间，再问你要不要继续搭 |
+
+## Token 用量
+
+第 0、1 关只跑脚本，几乎不用 token。第 2 到 4 关要由 Claude 子代理逐篇阅读，非常耗 token。
+
+下面的数字来自一次真实搭建的会话记录，也就是上面例子用的那个领域实例：66 篇论文，其中 51 篇用于文风判断。第 2 到 4 关共跑了 69 个子代理，用时约 10 小时。数字里包括搭建中途需要重跑的几轮，以及负责调度的主会话。
+
+| 步骤 | 子代理数 | 处理的 token | 其中输出 |
+|---|---|---|---|
+| 第 2 关：归纳章节分类、标注标题 | 9 | 约 2,100 万 | 约 9.6 万 |
+| 第 3 关：PASS-1 阅读 | 43 | 约 7,900 万 | 约 70 万 |
+| 第 3 关：PASS-2 归纳 | 11 | 约 1.72 亿 | 约 7.7 万 |
+| 第 4 关：例句标注 | 6 | 约 4,400 万 | 约 7,000 |
+| 同一时段的主会话 | | 约 1.72 亿 | 约 39 万 |
+| **合计** | **69** | **约 4.9 亿** | **约 130 万** |
+
+处理的 token 里约 96% 是从提示缓存里重复读取的，新输入约 1,800 万。粗略估算，每篇文风样本论文（用于文风判断的论文；这里 51 篇共约 4.9 亿）按约 960 万 token 计。`tier_status.py` 也是这样换算的。
+
+控制用量的办法：
+
+- 每关开始前先跑 `tier_status.py`，它会给出下一关需要多少轮子代理。
+- 第 3 关按工作方式表里说的逐章做，每做完一章看一下用量。
+- 如果只需要审稿功能，做完第 1 关就可以停：`<field>-lit` 从那时起就能用。
+
+**`<field>-polish` 每改一节也要花不少 token。** 用 a–j 步改例 4 那一节（15 句），一个子代理调用了 108 次工具，用时约 34 分钟，处理约 3,000 万 token，其中 98% 是从提示缓存里重复读取的（新输入加输出约 50 万）。大部分花在查语料（约 160 个候选说法）和逐句对照 PDF 上。1.4.0 修完后在同一节上再跑一次，用了 114 次工具调用、约 37 分钟、约 3,200 万 token。一键接入本身的第 0、1 关只跑脚本。
+
+**起草结构准则**（第 4 关）单独测过一次。一个子代理用最初那次搭建的 17 篇指南（约 15.2 万词）起草，调用了 101 次工具，用时 14 分钟，处理约 1,000 万 token，其中 97% 是从提示缓存里重复读取的（新输入加输出约 28 万）。`tier_status.py` 会按你的指南长度换算这个数。
 
 ## 第 4 关需要的写作指南
 
@@ -362,23 +398,6 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 2. 到第 4 关时，在 `-draft` skill 的 `references/registry.json` 里，`canon_sources` 下填上指南的文件数和至少三句逐字摘录（指南不到三篇时可以少于三句），摘录按文件名登记：`"canon_sources": {"count": 5, "spot_quotes": {"smith2010.txt": "从这个文件里原样复制的一句话"}}`。`check_drift` 会到对应文件里逐句查找这些摘录。
 3. 为这个领域写 `structure-canon.md`，引用指南时写明 `<key>.txt:行号`。可以从 `templates/draft/references/` 里的骨架开始写。`check_drift` 还要求文件里写到 `canon-sources`，并给还没测量的规则标上 `TO-MEASURE`；引文用 `check_canon_quotes.py` 核对。
 
-## 自检
-
-```bash
-py -3 tests/run_selftest.py
-```
-
-共 170 项检查，分六部分：
-
-1. 对模板脚本的单元测试。
-2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
-3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 除 `compile.py`（它需要 TeX）以外的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
-4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
-5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
-6. 1.4.0 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
-
-自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
-
 ## 疑难排解
 
 - **论文被标成 SCAN、SHORT 或 INTERLEAVED。** SCAN 表示 PDF 没有文字层：做一遍 OCR 再导入，或者就让它排除。SHORT 往往是只存下了摘要或网页：去下载全文。INTERLEAVED 表示两栏被交错读到了一起：用原来的 `--src` 或 `--map` 再跑一次 `ingest.py`，加上 `--force KEY --converter pymupdf`（装了 PyMuPDF 时，`tier0_accept.py` 会替你做）。
@@ -400,6 +419,37 @@ py -3 tests/run_selftest.py
   - `scan_appositive.py` 只列名词短语构成的尾巴，“, with no change over time” 这类尾巴要靠自己读出来；
   - 改完后再跑一次扫描，它列出的是这一节现在有的框架，分不出哪些是这次改动带进来的。把每次的输出存下来对比。
 - **文件里的 “parent”。** 这套做法最早是为实证金融论文写作手工搭的一对 skill。那一对不在本仓库里，工厂运行也不依赖它们。文件里说的 “parent” 指的就是它们，它们的数字只作为示意出现。
+
+## 术语表
+
+- **关（tier）。** 搭建的一个阶段：0 语料、1 文风层、2 章节图、3 阅读记录与 Version、4 例句库。每关结束都有验收，已建好的关记在 registry 的 `built_tiers` 里。
+- **`check_drift`。** `-lit` 和 `-draft` 各带一份的一致性检查（`scripts/check_drift.py`）。它核对已建好的各关的文件和数字是否彼此一致，有一项不通过就以退出码 1 结束。
+- **文风样本（style-safe）论文。** 用于文风测量的研究论文，即去掉重复、文本损坏、篇幅很短和不是研究论文的文档之后的语料。查术语用的范围更宽（terminology-safe）。
+- **registry。** 每个 skill 里的 `references/registry.json`，记录已建好的关，以及检查时要对照的计数。
+- **PASS-1、PASS-2。** 第 3 关的两轮阅读。PASS-1 逐段读每篇论文的某一章，写成白话记录；PASS-2 读同一章的全部记录，归纳出这一章的 Version。
+- **Version。** 某一章里做某件事的一种段落写法，至少有两篇论文用过：写明结构、什么时候用、什么时候不用，以及用过它的论文。`-draft` 的每一段都按一个 Version 写。
+- **L1、L2、L2b。** `-polish` 扫描的几层。L1 是没有一篇语料论文用过的词（L1b 是只有一两篇用过的）；L2 是反复出现的 2–4 个常见词组成的框架，这个组合一篇论文也没有；L2b 是由很常见的词组成、只出现一次的框架，组合同样一篇也没有，分成要逐条读的核心框架和普通的组合。
+- **PARENT-BLOCK、PARENT-EXAMPLE。** 模板里的标记。PARENT-BLOCK 里是最初那次搭建的内容，到对应的关时必须换成本领域的测量结果；PARENT-EXAMPLE 里是最初那次搭建的示例，作为示意保留。
+- **父本（the parent）。** 最早为实证金融论文写作手工搭的那一对 skill（见[已知限制](#已知限制)）。
+
+## 自检与贡献
+
+```bash
+py -3 tests/run_selftest.py
+```
+
+共 170 项检查，分六部分：
+
+1. 对模板脚本的单元测试。
+2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
+3. 一键接入测试：一份测试文献库（PDF、带 `file` 字段的 `.bib`、阅读笔记）和一份 `\input` 两节的稿件，从接入一直走到第 1 关；然后在稿件上跑 `<field>-polish` 除 `compile.py`（它需要 TeX）以外的全部脚本，其中也测了 PDF 里跨行断开的单词和单文件稿件。
+4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
+5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
+6. 1.4.0 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
+
+自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
+
+要报告问题或提交修改，请看 [CONTRIBUTING.md](CONTRIBUTING.md)。改动后自检必须仍是 `0 failed`；修 bug 时请加一项不修就会失败的检查。
 
 ## 仓库结构
 
