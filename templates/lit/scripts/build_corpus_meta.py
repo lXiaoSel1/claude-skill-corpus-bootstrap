@@ -110,6 +110,9 @@ LONG_TOKEN_CHARS = 28
 # (abstract-only entries, scans nobody OCR'd).
 TERMINOLOGY_ONLY = _fieldconfig.terminology_only()
 EXCLUDED = _fieldconfig.excluded()
+# 1.6.0: review and survey articles (field-config `reviews:`) -- terminology
+# yes, style sample no; their role says why.
+REVIEWS = _fieldconfig.reviews()
 
 # Per-paper citation culture (mixed corpora: economics author-year beside
 # medicine numeric/superscript). Measured, per 10k words, on the text before
@@ -305,13 +308,15 @@ def main():
     distinct = [k for k in rec if canonical[k] == k]
     damaged = {k for k in distinct if rec[k]["extraction"] != "clean"}
     term_safe = [k for k in distinct if k not in damaged and k not in EXCLUDED]
-    style_safe = [k for k in term_safe if k not in TERMINOLOGY_ONLY]
+    style_safe = [k for k in term_safe if k not in TERMINOLOGY_ONLY and k not in REVIEWS]
 
     def role(k):
         if k in EXCLUDED:
             return "excluded"
         if k in TERMINOLOGY_ONLY:
             return "terminology_reference"
+        if k in REVIEWS:
+            return "review_article"
         return "research_paper"
 
     L = []
@@ -337,7 +342,7 @@ def main():
         % len(distinct))
     add("  terminology_safe: %d     # distinct minus extraction-damaged and excluded -- USE THIS for term verdicts"
         % len(term_safe))
-    add("  style_safe: %d           # terminology_safe minus non-research reference documents"
+    add("  style_safe: %d           # terminology_safe minus non-research reference documents and review articles"
         % len(style_safe))
     add("")
     add("thresholds:")

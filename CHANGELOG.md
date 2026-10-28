@@ -1,5 +1,125 @@
 # Changelog — corpus-bootstrap
 
+- **2026-10-28 (1.6.3)** — the front block no longer swallows an introduction
+  that opens with no blank line, end marker or heading line. `stage_b_slice.py`
+  `front_end`: once FRONT_MIN_CHARS are in and the line before ends a sentence,
+  a run-in introduction heading (`1. Introduction * It is ...`, `Introduction
+  The phrase ...`, `i. Introduction`; not `Introduction of the rule ...`) or a
+  journal's small-caps lead-in (three or more capitalised words running into
+  lowercase prose: `IN SEPTEMBER 2008, SHORTLY AFTER THE default ...`) ends
+  the abstract and opens the introduction. On a finance corpus (re-sliced in
+  a scratch copy, the instance's own slices untouched) it restores the
+  introduction's opening for 12 of the 21 papers whose abstract slice had
+  taken it, and changes no other paper's abstract or introduction slice. Not
+  covered: three papers from venues that print no abstract (the abstract slice
+  IS the introduction's start; mark them `NOT A ABSTRACT`), five
+  paragraph-per-line texts whose introduction opens with an ordinary sentence,
+  and one abstract shorter than FRONT_MIN_CHARS (Tepper1981, 305 characters).
+  Selftest: 1 check (fails on 1.6.2).
+- **2026-10-28 (1.6.2)** — two fixes from a finance build's Tier 3 acceptance.
+  `recount.py`: a paragraph's count line may carry a reader's note after it
+  (`9 sentences  [cut by a page break ...]`); the pattern required the count
+  to end the line, so a finance build's uniformity calibration skipped 541
+  of 8,190 paragraphs (triples 150/6322 → 165/6853, both 2.4%; pairs 14.8% →
+  14.7%). `check_drift.py`: "registry sections.chapters recorded" prints the
+  chapter count when it passes; it printed its failure text either way.
+  `measure_verbs.py --write` crashed (NameError `_field`, left behind when the
+  corpus path moved to `lit_instance`); the header's source line now prints
+  the corpus path relative to the -draft skill. Selftest part 10 (3 checks;
+  all three fail on 1.6.1 — the selftest had imported measure_verbs but never
+  run `--write`).
+- **2026-10-27 (1.6.1)** — fixes from a finance build's Tier 1 acceptance
+  and Tier 2 start, and `scripts/seed_from.py`.
+  `_src.py`: a stretch shared with a cited paper that is mostly a proper name
+  ("the Retirement Funding Relief Act of 2021", fewer than `NAME_PROSE` = 3 words
+  outside names) prints as a `NAME` line and is not counted as COPIED, in
+  `draftcheck src` and `para_check`; `draftcheck src` no longer carries the
+  previous sentence's citations into a "This paper / We / Our" sentence.
+  `a1_headings.numbered_ok`: a numbered line opening with a stopword ("2.
+  Prior literature and hypothesis development") is a heading when it is short,
+  carries a field headword and no auxiliary verb (GarmanKubick2025 was lost).
+  `seed_from.py <field> --from <old draft> --tier 2` imports an older build's
+  A2 verdicts for papers whose corpus text is byte-identical, line by line
+  (IMPORT / PARTIAL / REREAD in `seed_report.md`); one old job the approved
+  taxonomy lacks stops the import unless `--job-map` names it. `a2_build.py`
+  leaves the imported lines out of the wave files. `--tier 3 --chapter <job>`
+  imports an older build's PASS1 record block for a paper whose corpus text is
+  byte-identical, whose slice has the same text lines (or only added heading
+  lines), and every one of whose quoted first sentences is in the new slice
+  (verify_shards.py's fingerprint): `_shards/<chapter>-00.md`, plus
+  `<chapter>-reread.txt` for PASS1. Slicer (`stage_b_slice.py`): a JSTOR cover page
+  ("JSTOR is a not-for-profit service ...", `Author(s):`, `Stable URL`) is
+  banner matter, not the abstract; a bare carriage return inside a line is
+  written as a space; new config `positional_skip` (`job:Key` items) names
+  papers whose text lost a positional block (a CAR text runs from the author
+  lines to "1. Introduction"), so no slice of author lines is written while
+  the next positional job still starts after it. `short_paras.py` drops a footnote kept as a paragraph ('4 Existing pension laws ...': 24 of 154 literature candidates in a finance build). New config `paragraph_targets` (`chapter:LO-HI:CITES`): `para_check.py --chapter <job>` without `--band` / `--cites` checks the manuscript's own target for that chapter. Slicer: prose between a trimmed front block and the next positional job's first heading (no other job in between) opens that job (SundaramYermack2007's introduction L11-158 sat in no slice). Known, not fixed: a positional abstract with no end marker can run on into the introduction's first page (about 19 of 107 papers in a finance build); the records recover those openings from the abstract slice. `draftcheck version-card --full` matches the bank by part and number. Self-test 213 checks.
+- **2026-10-27 (1.6.0)** — the parent's fast lane in the templates, and a
+  paragraph's shape measured. The draft instance gets the
+  parent's evidence cards (`cards.py`, a second whitelisted write path), the
+  one-call paragraph check (`para_check.py`: MAP, NUMBERS, COPIED, LENGTH,
+  STRENGTH, WORDING, FRAMES, CITATIONS) and `draftcheck.py src / router /
+  version-card` with `_src.py`, `_tiers.py` and `_ngram.py`, parameterized: the
+  corpus is the lit instance's, a key's PDF and note come from the onboarding
+  index, and the cards' design words are generic plus the field's
+  `design_terms`. Two parent bugs are not carried over: a name such as MAP-21 is
+  kept in a pasted line (it was deleted, so the line read NOT-VERBATIM) and
+  dropped only where numbers are read, and the ownership markers ("Consistent
+  with", "Following") match in any case. The lit instance gets rule B (a
+  replacement inside an attributed clause must be in that paper's own text,
+  `src --find`) and the copy check after FIX (4b). New layer F in
+  `measure_structure.py`: words, sentences and distinct citations per paragraph
+  for every chapter, style-safe papers only; `para_check.py --band LO-HI
+  --cites N` makes an author's target must-pass and prints the paragraph's
+  percentiles in its chapter; `short_paras.py` lists a chapter's short corpus
+  paragraphs for a short-paragraph bank and checks the bank verbatim;
+  `version-card --full` prints the whole paragraph behind each example and the
+  bank's entries. Review and survey articles (`reviews:` in field-config) stay
+  for terminology and leave the style sample, the cohesion norms and the
+  chapter sample; tier0_accept takes a map role `review` and lists papers that
+  call themselves a review. `measure_register.py --section <job>` measures one
+  chapter's register from its slices (capture.py passes arguments through);
+  `cohesion.py` marks the tails of a 3-4-sentence paragraph advisory. Onboarding
+  takes `--reuse-corpus <dir>` (a key with an earlier text is copied, not
+  converted again) and `--extra-map <csv>` (uncited papers). Instance trigger
+  phrases name the field. Self-test 198 checks (15 new).
+- **2026-10-17 (1.5.0)** — facts checked against the PDF, and a real
+  library's layout. New polish script
+  `num_check.py`: every number of every cited sentence of a section is looked
+  up in the cited papers' texts (TOGETHER / FOUND / APART / ELSEWHERE /
+  MISSING, with the page), so a number the draft copied wrong is caught even
+  in a sentence no edit touched; a number is looked up in the paper its
+  citation is attached to. New `copy_check.py`: every unquoted stretch of 7 or
+  more words a cited sentence shares with its paper (rule 2(a)'s six-word
+  exemption made measurable), with its page. `sent_diff.py` lists each change
+  of claim strength in a changed block (STRONGER? / HEDGE LOST?, three tiers
+  from hedges to causal claims; "result in" only as a verb, not "the results
+  in this paper") for h2, and step c keeps a replaced frame's
+  strength: a test rerun had replaced the 0-paper "evidence pointed to moral
+  hazard" with the attested "studies support the moral hazard hypothesis",
+  and no check saw it. pdf_ctx, source_term_check and num_check give the printed page
+  beside the file page (from the PDF's page labels, the page headers or the
+  .bib pages field), name a PDF that is a manuscript or working paper, and
+  name pages with no text layer, which were not searched; onboarding lists
+  articles whose PDF is a manuscript or preprint. Rule 1: a reading note is a
+  pointer, and a number or quotation from it counts only once it is found in
+  the PDF (draft: in the corpus file). A main file with prose of its own that
+  \input's only tables is split by its headings (a manuscript that wrote its
+  sections in main.tex was cut into its table files before), and
+  render_section.py prints a subsection heading inside such a section as its
+  title, not as LaTeX. Notes are
+  matched by the bib_key / citekey in their front matter as well as by file
+  name, and a note's PDF may be a bare file name with its folder in another
+  field (PDF路径 / pdf_dir); file names compare without spacing or
+  punctuation. When several PDFs match a key by title, the one named after
+  the entry (first author and year, or the title) comes first: a paper whose
+  references cite the title is not the paper. On a finance manuscript:
+  seven prose sections instead of 19 tables, 62 keys matched through their
+  notes (60 before the file-name fix, 47 by file name alone), Rauh (2006) on
+  its own PDF instead of a paper citing it. The draft's draftcheck.py now
+  reads citations with the shared natbib/biblatex pattern too (1.3.1 had
+  missed it: \citealp, \parencite and the rest went unlisted). Self-test:
+  172 checks unchanged, 11 added.
 - **2026-10-14 (1.4.1)** — the two gaps the polish rerun left.
   `sweep.py <section> --since <snapshot>` marks each FOCUS frame NEW (not in
   that snapshot of the section) or +k (used k more times) and lists the

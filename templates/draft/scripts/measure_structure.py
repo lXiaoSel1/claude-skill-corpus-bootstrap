@@ -26,6 +26,10 @@ DATA LAYERS -- three, with different denominators, never mixed silently
        files' "-- PaperKey" attributions.  A LOWER BOUND on part presence
        (examples are selective); typing from this layer alone is never
        "obligatory", only "attested-in >= n/den".
+    E. displayed-equation density per chapter (proxy: numbered labels).
+    F. (1.6.0) paragraph shape per chapter -- words, sentences and distinct
+       citations per paragraph, style-safe papers only; para_check.py's
+       percentile line and `--band` read it.
 
 RUN
     py -3 scripts/measure_structure.py            # report + write norms json
@@ -485,6 +489,92 @@ def layer_e():
     return out
 
 
+# ---------------------------------------------------------------- layer F
+# FACTORY 1.6.0. Paragraph shape per chapter: words (citations as printed),
+# sentences and distinct citations per paragraph, over the chapter slices of
+# the lit instance's STYLE-SAFE papers only -- a review article listed under
+# terminology_only / reviews in field-config.yaml never sets a length (the
+# parent's literature chapter took 30% of its paragraphs from one review
+# essay). para_check.py reads these numbers for its percentile line.
+def style_safe_ids():
+    meta = os.path.join(LIT, "references", "corpus_meta.yaml")
+    ids, cur = set(), None
+    if not os.path.exists(meta):
+        return ids
+    with open(meta, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            m = re.match(r"\s+- id:\s*(\S+)", line)
+            if m:
+                cur = m.group(1)
+                continue
+            if cur and re.match(r"\s+style_safe:\s*true", line):
+                ids.add(cur)
+                cur = None
+    return ids
+
+
+def _q(xs, p):
+    return xs[min(len(xs) - 1, int(p * (len(xs) - 1) + 0.5))] if xs else None
+
+
+def chapter_paragraphs(job, safe=None):
+    """[(key, paragraph text)] of one chapter's slices, style-safe papers only."""
+    d = os.path.join(REF, "slices", job)
+    safe = style_safe_ids() if safe is None else safe
+    out = []
+    for f in sorted(glob.glob(os.path.join(d, "*.txt"))):
+        key = os.path.basename(f)[:-4]
+        if key.startswith("_") or (safe and key not in safe):
+            continue
+        text = "\n".join(l for l in read(f).split("\n") if not l.startswith("====="))
+        for p in paragraph_texts(text):
+            out.append((key, p))
+    return out
+
+
+def paragraph_shape(paras):
+    """The numbers layer F stores for a list of (key, paragraph) pairs."""
+    W = sorted(len(p.split()) for _, p in paras)
+    S = sorted(len(split_sentences(p)) for _, p in paras)
+    C = sorted(len(distinct_cites(p)) for _, p in paras)
+    n = len(paras)
+    if not n:
+        return None
+    share = lambda f: round(sum(1 for x in W if f(x)) / float(n), 3)  # noqa: E731
+    cshare = lambda f: round(sum(1 for x in C if f(x)) / float(n), 3)  # noqa: E731
+    return {
+        "papers": len({k for k, _ in paras}), "paragraphs": n,
+        "words": {"min": W[0], "p10": _q(W, .1), "p25": _q(W, .25), "p50": _q(W, .5),
+                  "p75": _q(W, .75), "p90": _q(W, .9), "max": W[-1]},
+        "words_bins": {"lt100": share(lambda x: x < 100), "100_149": share(lambda x: 100 <= x < 150),
+                       "150_250": share(lambda x: 150 <= x <= 250), "gt250": share(lambda x: x > 250)},
+        "sentences": {"p10": _q(S, .1), "p25": _q(S, .25), "p50": _q(S, .5), "p75": _q(S, .75),
+                      "p90": _q(S, .9)},
+        "cites": {"p50": _q(C, .5), "p75": _q(C, .75), "p90": _q(C, .9),
+                  "share_zero": cshare(lambda x: x == 0), "share_ge3": cshare(lambda x: x >= 3),
+                  "share_ge5": cshare(lambda x: x >= 5)},
+        "word_samples": W, "cite_samples": C,
+    }
+
+
+def layer_f():
+    root = os.path.join(REF, "slices")
+    out = {}
+    if not os.path.isdir(root):
+        return out
+    safe = style_safe_ids()
+    for job in sorted(os.listdir(root)):
+        if not os.path.isdir(os.path.join(root, job)):
+            continue
+        shape = paragraph_shape(chapter_paragraphs(job, safe))
+        if shape:
+            shape["_why"] = ("paragraphs of the chapter slices (textseg recovery, para_min_chars);"
+                             " words as printed, citations = distinct %s citations;"
+                             " style-safe papers only" % _fieldstyle.style())
+            out[job] = shape
+    return out
+
+
 def main():
     dry = "--dry" in sys.argv
     tagged = parse_tagged() if os.path.exists(TAGGED) else {}
@@ -552,6 +642,15 @@ def main():
               % (ch, info["papers"], info["median"], info["p25"], info["p75"],
                  info["max"], info["papers_with_zero"], info["papers"], flag))
 
+    print("\nF. PARAGRAPH SHAPE per chapter (style-safe papers; words · sentences · citations)")
+    ff = layer_f()
+    for ch, info in sorted(ff.items()):
+        w, s, c, b = info["words"], info["sentences"], info["cites"], info["words_bins"]
+        print("   %-24s n=%3d papers %3d ¶  words P25 %s · P50 %s · P75 %s · P90 %s"
+              "  (<100 %.0f%%, >250 %.0f%%)  sentences P50 %s  cites P50 %s · P90 %s"
+              % (ch, info["papers"], info["paragraphs"], w["p25"], w["p50"], w["p75"], w["p90"],
+                 100 * b["lt100"], 100 * b["gt250"], s["p50"], c["p50"], c["p90"]))
+
     import datetime as _dt
     norms = {"_built": _dt.date.today().isoformat(),
              "_script": "scripts/measure_structure.py",
@@ -559,9 +658,10 @@ def main():
                          "B": "intro-job slice lexical markers (textseg paragraphs)",
                          "C": "full-sample signposting (clean_prose text)",
                          "D": "part-attribution lower bounds",
-                         "E": "displayed-equation density per chapter"},
+                         "E": "displayed-equation density per chapter",
+                         "F": "paragraph shape per chapter (words, sentences, citations)"},
              "A_tagged18": a, "B_slices": b, "C_full60": c, "D_attrib_lb": dd,
-             "E_equation_density": ee,
+             "E_equation_density": ee, "F_paragraph_shape": ff,
              "thresholds": {"obligatory": OBLIGATORY,
                             "optional_floor": OPTIONAL_FLOOR,
                             "_why": "Swales 2004 three-way typing, adapted:"

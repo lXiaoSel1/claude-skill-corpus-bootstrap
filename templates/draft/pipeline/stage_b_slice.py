@@ -54,6 +54,7 @@ OPEN_LINES = 25          # how much of each block goes into _openings.md
 
 JOBS = _jobs.require_jobs()
 POSITIONAL = [j for j in _jobs.positional_jobs() if j in JOBS]
+SKIP = _jobs.positional_skip()      # {job: {keys}}: lost positional blocks, not written
 FRONT = POSITIONAL[0] if POSITIONAL else None
 
 ABS_LABEL = re.compile(r'^\s*(abstract|r[eé]sum[eé])\b\s*[:.]?\s*(.*)$', re.I)
@@ -70,7 +71,10 @@ ABS_END = (re.compile("|".join("(?:%s)" % m for m in _aem), re.I) if _aem else
                       re.I))
 BANNER = re.compile(r'(downloaded from|https?://|www\.|electronic copy available|'
                     r'^\s*page\s+\d|©|\bdoi\b|copyright|all rights reserved|'
-                    r'received\b|accepted\b|correspond)', re.I)
+                    r'received\b|accepted\b|correspond|'
+                    # JSTOR cover page (a finance build, 2026-10-27: its 'JSTOR is a not-for-profit
+                    # service ...' paragraph was sliced as Ippolito1985's abstract)
+                    r'jstor|author\(s\):|stable url)', re.I)
 ABS_MAX_CHARS = 3500      # cap by CHARACTERS, not lines: one reflowed "line"
                           # can be 2000 chars, so a 60-line cap ran to 120k.
 PROSE_RUN_LINES = 3       # line-per-line text: a prose run is >=3 lines ...
@@ -159,6 +163,7 @@ _CONCL_RUNIN = re.compile(r'^\s*(?:conclusions?|interpretation|implications)\s*[
 # Conclusion sat behind one and was lost, 2026-10-07).
 _FURNITURE = re.compile(r'^\s*(?:author manuscript|\d{1,4})\s*$', re.I)
 FRONT_MIN_CHARS = 400     # a paragraph break before this is title/label debris
+GAP_MIN_CHARS = 400       # prose between the front block and the intro heading that is the intro's opening
 PARA_LINE_CHARS = 250     # a line this long is a whole paragraph (PMC/XML text)
 RESUME_LOOKAHEAD = 30     # lines searched for the abstract resuming after a break
 _EMAIL_ONLY = re.compile(r'^\s*\S+@\S+\.[A-Za-z]{2,}\s*$')
@@ -168,6 +173,41 @@ _EMAIL_ONLY = re.compile(r'^\s*\S+@\S+\.[A-Za-z]{2,}\s*$')
 # lines; as a strong marker it swallowed them, 2026-10-07).
 _WEAK_END = re.compile(r'^\s*(?:\S+@\S+\.[A-Za-z]{2,}\s*$|this\s+is\s+an\s+open[- ]access\s+article)',
                        re.I)
+
+# FACTORY 1.6.3: the introduction can open right after the abstract with no
+# blank line, no end marker and no heading line of its own (a finance build,
+# 2026-10-28: 21 of 107 introductions lost their first paragraphs to the
+# abstract slice). Two shapes end the front block once FRONT_MIN_CHARS are in
+# and the line before ends a sentence (or a blank line precedes):
+#   * a run-in introduction heading -- `1. Introduction * It is well known`
+#     (PontiffShleiferWeisbach1990), `Introduction The phrase ...` (shi2017buyins),
+#     `i. Introduction` (DeAngelo1981); never `Introduction of the rule ...`;
+#   * a journal's small-caps lead-in, three or more capitalised words running
+#     into lowercase prose -- `IN RECENT DECADES, INTANGIBLE capital ...`,
+#     `AS A RESULTOFrapid growth ...` (JF/RFS openings).
+_INTRO_RUNIN = re.compile(r'^\s*(?:(?:\d{1,2}|[IVXivx]{1,4})\s*[.:)]?\s*)?(?i:introduction)\b'
+                          r'(?:\s*(?:[*†‡:.]|$)|\s+[A-Z“"])')
+_SMALLCAPS_LEAD = re.compile(r"^\s*(?:[A-Z0-9][A-Z0-9'’,.\-]*\s+){2,}[A-Z][A-Z'’\-]+(?:\s+[a-z]|[a-z])")
+_SENT_END = re.compile(r'[.!?]["”’)]?[\d*†‡]*\s*$')
+
+
+def _lead_in(lines, s, stop):
+    """0-based index of the first line in the front block (from line s, before
+    `stop`) that opens the introduction -- a run-in introduction heading or a
+    small-caps lead-in -- once FRONT_MIN_CHARS are in and the line before ends
+    a sentence; None otherwise."""
+    chars, prev = 0, ""
+    for j in range(s - 1, min(stop, len(lines))):
+        st = lines[j].strip()
+        if not st:
+            prev = "."            # a blank line is a boundary
+            continue
+        if (chars >= FRONT_MIN_CHARS and _SENT_END.search(prev)
+                and (_INTRO_RUNIN.match(st) or _SMALLCAPS_LEAD.match(st))):
+            return j
+        chars += len(st) + 1
+        prev = st
+    return None
 
 
 def _resumes(lines, i, stop):
@@ -224,6 +264,9 @@ def front_end(lines, s, e):
     in the block but do not count toward ABS_MAX_CHARS -- counted, they cut
     P40's abstract at its Conclusions label."""
     stop = min(e, len(lines))
+    li = _lead_in(lines, s, stop)
+    if li is not None:
+        stop = li                 # the introduction opens on this line (1.6.3)
     # A STRONG end marker (Keywords, JEL, Learning Objectives ...; not the weak
     # e-mail-only line) inside the block decides the end outright: everything
     # before it is the abstract, interruptions included. The paragraph-break
@@ -364,6 +407,23 @@ def blocks_for(k, lines, cand, assign):
     if trimmed:
         out[FRONT] = trimmed
 
+    # FACTORY 1.6.1: the trimmed front block can end long before the first
+    # heading of the next positional job. When that job HAS a heading-derived
+    # block and no other job's block starts in between, the prose in the gap
+    # is that job's opening (a finance build, 2026-10-27: SundaramYermack2007's
+    # introduction L11-158 sat in no slice between a trimmed 'ABSTRACT' and
+    # the subsection 'This Paper's Contribution').
+    fe = max((e for _, e, _ in out.get(FRONT, [])), default=0)
+    nxt_job = POSITIONAL[1] if len(POSITIONAL) > 1 else None
+    if fe and nxt_job and out.get(nxt_job) and not any(
+            h.startswith('[POSITIONAL') for _, _, h in out[nxt_job]):
+        s0 = min(s for s, _, _ in out[nxt_job])
+        between = [s for j, bl in out.items() if j not in (FRONT, nxt_job) for s, _, _ in bl if fe < s < s0]
+        gap = "".join(lines[fe:s0 - 1])
+        if s0 - fe > 1 and not between and len(gap) >= GAP_MIN_CHARS:
+            out[nxt_job].insert(0, (fe + 1, s0 - 1, '[POSITIONAL: after the front block, before the first %s '
+                                                     'heading]' % nxt_job))
+
     # Later positional jobs, in order, each after the previous one.
     prev_end = max((e for _, e, _ in out.get(FRONT, [])), default=0)
     later = POSITIONAL[1:]
@@ -385,6 +445,14 @@ def blocks_for(k, lines, cand, assign):
             out[job].append((starts[job], end,
                              '[POSITIONAL: %s -> first non-positional heading]'
                              % how[job]))
+    # FACTORY 1.6.1: positional blocks the extraction lost (config
+    # positional_skip) were placed above, so the chain after them is right,
+    # but they are not written.
+    for job in POSITIONAL:
+        if k in SKIP.get(job, ()) and job in out:
+            out[job] = [b for b in out[job] if not b[2].startswith('[POSITIONAL')]
+            if not out[job]:
+                del out[job]
     return out
 
 
@@ -451,7 +519,10 @@ def main():
                 # CRLF corpus lines keep their '\r' after split('\n'); writing
                 # them through Windows text mode produced '\r\r\n' and doubled
                 # every line count for universal-newline readers (2026-10-07).
-                seg = [x.rstrip('\r') for x in lines[s - 1:e]]
+                # A bare '\r' INSIDE a line (a font-encoded table in
+                # CantorHoodPower2018, a finance build, 2026-10-27) is a space: line
+                # numbers come from '\n' alone and stay as they are.
+                seg = [x.rstrip('\r').replace('\r', ' ') for x in lines[s - 1:e]]
                 total += len(seg)
                 body.append(f"===== {k} | L{s}-{e} | {head}")
                 body.extend(seg)

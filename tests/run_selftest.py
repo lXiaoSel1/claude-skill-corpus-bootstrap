@@ -259,6 +259,13 @@ def integration(tmp):
           got.get(28) == "5 Estimation" and 39 not in got, "%s / %s" % (got.get(28), got.get(39)))
     check("A1: curly apostrophe in a bare heading", got.get(32, "").startswith("Description of"),
           str(got.get(32)))
+    hw0 = a1.HEADWORDS
+    a1.HEADWORDS = re.compile(r"\b(literature|hypothes)", re.I)
+    ok1 = a1.numbered_ok("Prior literature and hypothesis development")
+    ok2 = a1.numbered_ok("Prior to 2006 the plans were not required to fund")
+    a1.HEADWORDS = hw0
+    check("A1 (1.6.1): 'Prior literature and ...' with a headword is a heading; 'Prior to ... were' is not",
+          ok1[0] and not ok2[0], "%s / %s" % (ok1, ok2))
 
     # stage_b_slice.front_end on four real layouts (a copy of the draft with a
     # taxonomy, so the slicer can be imported; _jobs must be re-imported there)
@@ -302,6 +309,51 @@ def integration(tmp):
     check("slicer: e-mail interruption resumes to Keywords (P02); label+blank waits for its "
           "paragraph (P69); NBER abstract stops before the author block",
           ends2 == (13, 12, 8), str(ends2))
+    js = ["The Economic Function of Underfunded Pension Plans Author(s): R. A. Ippolito Source: The Journal "
+          "of Law & Economics, Vol. 28 Stable URL: https://www.jstor.org/stable/725361",
+          "JSTOR is a not-for-profit service that helps scholars, researchers, and students discover, use, and "
+          "build upon a wide range of content in a trusted digital archive. We use information technology.",
+          "This content downloaded from 155.247.165.86 on Tue, 07 Apr 2026 20:23:24 UTC", "",
+          "THE ECONOMIC FUNCTION OF UNDERFUNDED PENSION PLANS", "RICHARD A. IPPOLITO",
+          "THIS paper is about a holdup problem and the firm's attempt to bond itself against it. " + sent * 2,
+          "I. INTRODUCTION", para]
+    spj = sb.front_span(js, 8)
+    check("slicer (1.6.1): a JSTOR cover page is banner matter; the abstract is the paper's lead paragraph",
+          spj is not None and spj[0] == 7, str(spj))
+    lg = ["A Title Of The Paper", "ABSTRACT", sent * 6, "", "IN THE THREE DECADES SINCE " + para, para,
+          "This Paper's Contribution", para, "2 Methods", para]
+    cg = {"G": {"candidates": [{"line": 2, "verbatim": "ABSTRACT", "level": 1},
+                               {"line": 7, "verbatim": "This Paper's Contribution", "level": 2},
+                               {"line": 9, "verbatim": "2 Methods", "level": 1}], "ref_cutoff": 10}}
+    og = sb.blocks_for("G", lg, cg, {("G", 2): ["abstract"], ("G", 7): ["introduction"], ("G", 9): ["methods"]})
+    intro = og.get("introduction", [])
+    check("slicer (1.6.1): unclaimed prose between a trimmed abstract and a later introduction heading opens "
+          "the introduction", len(intro) == 2 and intro[0][1] == 6 and intro[0][2].startswith("[POSITIONAL")
+          and intro[1][0] == 7 and og["abstract"][0][1] < intro[0][0], str(dict(og)))
+    lk = ["A Title Of The Paper", "Abstract", sent * 6, "", "Introduction text " + para, para,
+          "2 Methods", para, para]
+    ck = {"K": {"candidates": [{"line": 7, "verbatim": "2 Methods", "level": 1}], "ref_cutoff": 9}}
+    ak = {("K", 7): ["methods"]}
+    skip0 = sb.SKIP
+    sb.SKIP = {}
+    o0 = sb.blocks_for("K", lk, json.loads(json.dumps(ck)), ak)
+    sb.SKIP = {"abstract": {"K"}}
+    o1 = sb.blocks_for("K", lk, json.loads(json.dumps(ck)), ak)
+    sb.SKIP = skip0
+    check("slicer (1.6.1): positional_skip drops the lost abstract but the introduction still starts after it",
+          "abstract" in o0 and "abstract" not in o1 and o1.get("introduction") == o0.get("introduction")
+          and o0.get("introduction") and o0["introduction"][0][0] > o0["abstract"][0][1],
+          "%s / %s" % (dict(o0), dict(o1)))
+    ab = ("This paper studies how pension funding rules shape the investment of sponsoring firms. " * 6).strip()
+    body = "the default of a large bank changed how sponsors fund their plans and what they hold. " * 3
+    sc = ["ABSTRACT", ab, "IN SEPTEMBER 2008, SHORTLY AFTER THE " + body, body, body]
+    ri = ["Abstract", ab, "1. Introduction * It is well known that sponsors gain from " + body, body]
+    rn = ["Abstract", ab, "Introduction of the 2006 rule raised required contributions for most sponsors.",
+          "THE JOURNAL OF FINANCE", "more of the abstract follows here and ends the block."]
+    e3 = (sb.front_end(sc, 1, len(sc)), sb.front_end(ri, 1, len(ri)), sb.front_end(rn, 1, len(rn)))
+    check("slicer (1.6.3): a small-caps lead-in or a run-in 'Introduction' heading after the abstract opens "
+          "the introduction; 'Introduction of the rule' and a capitalised running head do not",
+          e3 == (2, 2, 5), str(e3))
     two = sent + " " + sent
     p08 = ["Abstract", "Objective—" + two, two, "Results—" + two, "The increases were highest.",
            "", "Author Manuscript", "", "Conclusion—Our estimates showed that low-cost claims could cost the",
@@ -1476,13 +1528,504 @@ def v140(tmp):
           and rc2 != 0 and "not both" in o2, (o1 + o2).strip()[-60:])
 
 
+def v150(tmp):
+    print("\npart 7: 1.5.0 -- numbers against the PDF, printed pages, prose with table inputs, notes by key")
+    import fitz
+    T = os.path.join(FACTORY, "templates")
+    root = os.path.join(tmp, "p3")
+    pol = os.path.join(root, "skills", "fx3-polish")
+    d = os.path.join(tmp, "p7")
+    lib, notes = os.path.join(d, "lib"), os.path.join(d, "notes")
+    for x in (lib, notes):
+        os.makedirs(x)
+
+    def pdf(name, pages, labels_from=None):
+        p = os.path.join(lib, name)
+        doc = fitz.open()
+        for top, body in pages:
+            pg = doc.new_page()
+            if top:
+                pg.insert_text((72, 60), top)
+            if body:
+                pg.insert_textbox(fitz.Rect(72, 90, 540, 760), body, fontsize=10)
+        if labels_from:
+            doc.set_page_labels([{"startpage": 0, "prefix": "", "style": "D", "firstpagenum": labels_from}])
+        doc.save(p)
+        doc.close()
+        return p
+    filler = "The analysis follows a large panel of plans over many years. " * 3
+    pa = pdf("NumA.pdf", [("", "A study of plans. " + filler),
+                          ("", "Male workers had an IRR of 1.24 (95% CI 0.98\u22121.58) relative to women. "
+                               "The sample covers 1,830 workers. " + filler),
+                          ("", "")], labels_from=101)
+    pb = pdf("NumB.pdf", [("", "Author manuscript. The odds were 2\u00b717 times higher and the rate was "
+                               "16.4% in the first year. " + filler)])
+    pc = pdf("NumC.pdf", [("", "Front matter of the article. " + filler), ("", "The estimate is 3.33. " + filler)])
+    pd = pdf("NumD.pdf", [("17", "Opening page. " + filler), ("18", "Middle page. " + filler),
+                          ("19", "The estimate is 4.44. " + filler)])
+    with open(os.path.join(d, "refs.bib"), "w", encoding="utf-8") as fh:
+        fh.write("@article{NumC2018,\n  author = {C, A},\n  title = {T},\n  year = {2018},\n  pages = {55--56}\n}\n")
+    ms = os.path.join(d, "test.tex")
+    with open(ms, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Results}\\label{sec:results}\n"
+                 "\\citet{NumA2020} report an IRR of 1.24 (95\\% CI 0.98--1.58). "
+                 "The sample covers 1{,}830 workers \\citep{NumA2020}. "
+                 "\\citet{NumB2019} find 2.17 times the odds and a rate of 16.4\\%. "
+                 "\\citet{NumA2020} find 2.71 times the odds. "
+                 "Together, \\citet{NumA2020} and \\citet{NumB2019} report 1.24 and 16.4\\%. "
+                 "Under MAP-21 the rate rose \\citep{NumA2020}. "
+                 "\\citet{NumC2018} estimate 3.33. \\citet{NumD2017} estimate 4.44.\n"
+                 "\\bibliography{refs}\n\\end{document}\n")
+    os.makedirs(os.path.join(d, ".polish"))
+    with open(os.path.join(d, ".polish", "library-index.json"), "w", encoding="utf-8") as fh:
+        json.dump({"meta": {"notes_dir": notes},
+                   "keys": {"NumA2020": {"pdf": pa}, "NumB2019": {"pdf": pb}, "NumC2018": {"pdf": pc},
+                            "NumD2017": {"pdf": pd}}}, fh)
+
+    def prun(script, *args):
+        return run([os.path.join(pol, "scripts", script)] + list(args), cwd=d)
+    rc, out = prun("num_check.py", "results", "--manuscript", ms)
+    check("num_check: TOGETHER across a range, a thousands separator and a middle dot; MISSING; ELSEWHERE;"
+          " a name's number skipped",
+          rc == 0 and re.search(r"TOGETHER\s+NumA2020\s+p\.2 \(printed 102\)", out)
+          and re.search(r"TOGETHER\s+NumB2019", out) and re.search(r"MISSING\s+2\.71: in none of NumA2020", out)
+          and re.search(r"ELSEWHERE 1\.24 is not in NumB2019, the paper it is attached to, but in NumA2020", out)
+          and "numbers: 21" not in out, out.strip()[-90:])
+    check("printed pages from the .bib pages field and from page numbers on the pages",
+          re.search(r"NumC2018\s+p\.2 \(printed 56\)", out) and re.search(r"NumD2017\s+p\.3 \(printed 19\)", out),
+          out.strip()[-60:])
+    check("a manuscript PDF and a page with no text layer are named",
+          "NumB2019: Author manuscript: not the version of record" in out
+          and "NumA2020: page(s) 3 have no text layer" in out, out.strip()[-60:])
+    cc = os.path.join(d, "copy.tex")
+    with open(cc, "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Results}\\label{sec:results}\n"
+                 "\\citet{NumA2020} say that male workers had an IRR of 1.24 relative to women. "
+                 "They write that ``the sample covers 1,830 workers in the panel of plans'' (p.~2).\n"
+                 "\\end{document}\n")
+    rc, out = prun("copy_check.py", "results", "--manuscript", cc)
+    check("copy_check: an unquoted 7+-word stretch from the cited paper is listed, a quoted one is not",
+          rc == 1 and re.search(r"words from NumA2020 p\.2 \(printed 102\): \"male workers had an irr of 1 24", out)
+          and "sample covers" not in out and "1 unquoted stretch" in out, out.strip()[-80:])
+
+    # a main file with prose of its own and \input'd tables: heading sections
+    tx = os.path.join(d, "mixed")
+    os.makedirs(os.path.join(tx, "Table"))
+    os.makedirs(os.path.join(tx, "sections"))
+    prose = " ".join(["plans"] * 60)
+    with open(os.path.join(tx, "Table", "t1.tex"), "w", encoding="utf-8") as fh:
+        fh.write("\\begin{table}\n\\caption{Means}\n\\begin{tabular}{lr}\nA & 1 \\\\\n\\end{tabular}\n\\end{table}\n")
+    with open(os.path.join(tx, "sections", "extra.tex"), "w", encoding="utf-8") as fh:
+        fh.write(prose + "\n")
+    with open(os.path.join(tx, "main.tex"), "w", encoding="utf-8") as fh:
+        fh.write("\\documentclass{article}\n\\begin{document}\n\\section{Introduction}\\label{sec:intro}\n"
+                 + prose + "\n\\input{Table/t1}\n\\section{Results and Discussion}\n" + prose
+                 + "\n\\section{Extra}\n\\input{sections/extra}\n\\end{document}\n")
+    msm = fresh_import("manuscript", os.path.join(T, "polish", "scripts"))
+    secs = {s.key: s for s in msm.Manuscript(os.path.join(tx, "main.tex")).sections}
+    check("manuscript: prose in the main file + \\input tables -> heading sections; a prose input stays a section",
+          sorted(secs) == ["extra", "intro", "results-and-discussion"]
+          and secs["extra"].path.endswith("extra.tex") and secs["intro"].kind == "range", str(sorted(secs)))
+
+    # notes: the key from the front matter, the PDF from a folder field (spacing aside)
+    pdf("Note File.pdf", [("", "The reform year saw spending rise. " + filler)])
+    with open(os.path.join(notes, "some_other_name.md"), "w", encoding="utf-8") as fh:
+        fh.write("---\nbib_key: Note2099\n对应PDF: Note  File.pdf\nPDF路径: %s\n---\n"
+                 "- p.3：\"spending rose sharply in the reform year\"\n" % lib)
+    ob = fresh_import("onboard", os.path.join(FACTORY, "scripts"))
+    got = ob.scan_notes(notes, "pdf", ob.pdf_names([lib])).get("Note2099") or {}
+    check("onboard: a note's key from its front matter, its PDF from a folder field",
+          got.get("pdf") and os.path.basename(got["pdf"]) == "Note File.pdf", str(got)[:80])
+    rc, out = prun("note_terms.py", "Note2099", "spending", "--manuscript", ms)
+    check("polish note_terms: a note found by the bib_key in its front matter",
+          rc == 0 and "== Note2099  (some_other_name.md)" in out and re.search(r"p\.3\s+spending rose", out),
+          out.strip()[:80])
+    entry = {"type": "article", "fields": {"author": "Rauh, Joshua", "year": "2006",
+                                            "title": "Investment and financing constraints"}}
+    order = sorted(["J Fin 2012 BAKKE Threshold events.pdf", "J Fin 2006 RAUH Investment.pdf"],
+                   key=ob.ranker(entry))
+    check("onboard: the PDF named after the entry before one that only cites its title",
+          order[0].startswith("J Fin 2006 RAUH"), str(order))
+    para = os.path.join(d, "para150.txt")
+    with open(para, "w", encoding="utf-8") as fh:
+        fh.write("Costs rose \\citealp{Wu2019}. Use fell \\parencite[p.~3]{Brown2015}. \\nocite{Hidden2001}\n")
+    rc, out = run([os.path.join(root, "skills", "fx3-draft", "scripts", "draftcheck.py"), "para", para])
+    check("draft draftcheck: \\citealp and biblatex \\parencite keys read, \\nocite not",
+          rc == 0 and "Brown2015, Wu2019" in out and "Hidden2001" not in out, out.strip()[-60:])
+
+    # sent_diff: claim strength, on the fixture's results section (v140's b6 edit kept "argue")
+    def prun3(script, *args):
+        return run([os.path.join(pol, "scripts", script)] + list(args), cwd=root)
+    rc, out = prun3("sent_diff.py", "b6", "results")
+    check("sent_diff: an edit that keeps the verb's strength lists no strength change",
+          rc == 0 and "STRONGER?" not in out and "HEDGE LOST?" not in out
+          and "claim strength: no change" in out, out.strip()[-60:])
+    prun3("snapshot.py", "b7", "results")
+    pairs = os.path.join(root, "pairs7.txt")
+    with open(pairs, "w", encoding="utf-8") as fh:
+        fh.write("The authors argue that this pattern holds in general\n>>>\n"
+                 "The authors show that this pattern holds in general\n")
+    prun3("rep.py", "results", pairs)
+    rc, out = prun3("sent_diff.py", "b7", "results")
+    check("sent_diff: 'argue' -> 'show' is listed as STRONGER? and HEDGE LOST?",
+          re.search(r"STRONGER\? \+show \(0 -> 1\)", out) and re.search(r"HEDGE LOST\? -argue \(1 -> 0\)", out)
+          and "claim strength: 2 change(s)" in out, out.strip()[-80:])
+
+
+def v160(tmp):
+    print("\npart 8: 1.6.0 -- the fast lane, paragraph shape, reviews, reused text")
+    sc = os.path.join(FACTORY, "scripts")
+    root = os.path.join(tmp, "p3")
+    skills = os.path.join(root, "skills")
+    lit, draft = os.path.join(skills, "fx3-lit"), os.path.join(skills, "fx3-draft")
+    dc = os.path.join(draft, "scripts", "draftcheck.py")
+    d = os.path.join(tmp, "p8")
+    os.makedirs(d)
+
+    def w(path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        return path
+
+    rc, out = run([dc, "own", "Consistent with prior work, plans de-risk.", "costs rose in our sample"])
+    check("ownership: a sentence-initial 'Consistent with' is a third-party marker (any case)",
+          "THIRD-PARTY" in out.split("\n")[0] and "clean" in out, out.strip()[:70])
+
+    corpus = os.path.join(lit, "references", "corpus")
+    w(os.path.join(corpus, "Map2021.txt"),
+      "Funding Relief Under MAP-21\n\nAbstract\n\nWe find that under MAP-21 the funding relief lowered "
+      "required contributions by 12 percent in the first year of the panel, and the effect was larger "
+      "for underfunded plans.\n\n1 Introduction\n\nThe relief changed the funding rules for every single-"
+      "employer plan in the sample of 1,830 plans observed between 2010 and 2016.\n")
+    rc, out = run([dc, "src", "--line", "Map2021", "under MAP-21 the funding relief lowered required contributions"])
+    check("src --line: a pasted line holding MAP-21 is VERBATIM (the name was deleted before 1.6.0)",
+          rc == 0 and "VERBATIM" in out and "NOT-VERBATIM" not in out, out.strip()[-70:])
+    para = w(os.path.join(d, "p.txt"), "Relief under MAP-21 cut required contributions by 12 percent \\citep{Map2021}.\n")
+    rc, out = run([dc, "src", para])
+    check("src: 12 is found in the cited paper and the 21 of MAP-21 is not read as a number",
+          rc == 0 and re.search(r"(TOGETHER|FOUND)\s+12 ", out) and not re.search(r"^\s+MISSING", out, re.M),
+          out.strip()[-80:])
+
+    w(os.path.join(corpus, "Relief2022.txt"),
+      "Congress passed the Retirement Funding Relief Act of 2021 in March, and most sponsors elected the relief. "
+      "We find that contributions fell by 15 percent after the relief for underfunded plans in our sample.\n")
+    para = w(os.path.join(d, "relief.txt"),
+             "The Retirement Funding Relief Act of 2021 changed the funding rules \\citep{Relief2022}. "
+             "This paper finds that contributions fell by 15 percent after the relief for underfunded plans.\n")
+    rc, out = run([dc, "src", para])
+    check("src (1.6.1): a shared statute name is a NAME line, not COPIED; a 'This paper' sentence carries no cite",
+          rc == 0 and re.search(r"^\s+NAME\s+7 words from Relief2022", out, re.M) and "COPIED" not in out
+          and not re.search(r"^S2", out, re.M) and "copied stretches (>= 7 words) 0" in out, out.strip()[-90:])
+    para = w(os.path.join(d, "relief2.txt"),
+             "Contributions fell by 15 percent after the relief for underfunded plans \\citep{Relief2022}.\n")
+    rc, out = run([dc, "src", para])
+    check("src (1.6.1): the paper's own prose copied word for word is still COPIED",
+          rc == 1 and re.search(r"^\s+COPIED \d+ words from Relief2022", out, re.M), out.strip()[-80:])
+
+    cards = os.path.join(draft, "scripts", "cards.py")
+    rc1, o1 = run([cards, "build", "Map2021"])
+    card = os.path.join(draft, "references", "cards", "Map2021.md")
+    rc2, o2 = run([cards, "show", "Map2021"])
+    check("cards.py: build writes a card with the paper's own result line; show prints it",
+          rc1 == 0 and os.path.isfile(card) and re.search(r"^R1 \[corpus:\d+", open(card, encoding="utf-8").read(), re.M)
+          and rc2 == 0 and "We find that" in o2, (o1 + o2).strip()[-70:])
+
+    pc = os.path.join(draft, "scripts", "para_check.py")
+    ptxt = ("Relief under MAP-21 cut required contributions by 12 percent \\citep{Map2021}. "
+            "Underfunded sponsors gained the most from that change \\citep{Map2021}.\n=== map\n"
+            "Relief under MAP-21 | Map2021#R1\nUnderfunded sponsors gained | Map2021#R1\n")
+    pf = w(os.path.join(d, "pc.txt"), ptxt)
+    rc1, o1 = run([pc, pf, "--band", "5-10", "--cites", "0"])
+    rc2, o2 = run([pc, pf, "--band", "5-200", "--cites", "3"])
+    check("para_check: --band and --cites are must-pass (OVER fails, a wide band passes)",
+          rc1 == 1 and "band 5-10: OVER" in o1 and "(max 0: OVER)" in o1
+          and rc2 == 0 and "band 5-200: OK" in o2 and "(max 3: OK)" in o2, (o1 + o2).strip()[-90:])
+    dcfg = os.path.join(draft, "references", "field-config.yaml")
+    dcfg0 = open(dcfg, encoding="utf-8").read()
+    w(dcfg, dcfg0.replace("\nparagraph_targets:\n", "\nparagraph_targets:\n  - litrev:5-10:0\n", 1))
+    rc1, o1 = run([pc, pf, "--chapter", "litrev"])
+    rc2, o2 = run([pc, pf, "--chapter", "litrev", "--band", "5-200", "--cites", "3"])
+    w(dcfg, dcfg0)
+    check("para_check (1.6.1): --chapter alone takes the chapter's paragraph_targets; --band / --cites win",
+          rc1 == 1 and "band 5-10 from field-config paragraph_targets" in o1 and "band 5-10: OVER" in o1
+          and "(max 0: OVER)" in o1 and rc2 == 0 and "band 5-200: OK" in o2, (o1 + o2).strip()[-90:])
+
+    p1 = ("Prior studies document that funding relief changes sponsor behavior (Smith, 2019; Lee and Kim, 2020; "
+          "Brown et al., 2015). Smith (2019) finds that contributions fall after relief, and Lee and Kim (2020) "
+          "show that the decline is larger for constrained firms. These studies leave open how plans invest the "
+          "freed resources, which is the question we take up in this paper.")
+    p2 = ("A second paragraph without any citation explains the institutional setting of the relief in more "
+          "detail for readers who do not know the funding rules of the plans studied here, and it is long "
+          "enough to pass the calibrated paragraph threshold of the fixture corpus.")
+    sl = os.path.join(draft, "references", "slices", "litrev")
+    w(os.path.join(sl, "Smith2019.txt"), "===== Smith2019 | litrev =====\n" + p1 + "\n" + p2 + "\n")
+    code = ("import sys, json; sys.path.insert(0, %r); import measure_structure as m; "
+            "f = m.layer_f().get('litrev') or {}; "
+            "print(json.dumps([f.get('papers'), f.get('paragraphs'), max(f.get('cite_samples') or [0])]))"
+            % os.path.join(draft, "scripts"))
+    rc, out = run(["-c", code])
+    check("measure_structure layer F: paragraphs, words and citations per chapter (header line skipped)",
+          rc == 0 and out.strip().splitlines()[-1] == "[1, 2, 3]", out.strip()[-60:])
+
+    sp = os.path.join(draft, "scripts", "short_paras.py")
+    rc, out = run([sp, "litrev", "--words", "20-200", "--cites", "2-6"])
+    check("short_paras: lists the cited short paragraph, not the one without citations",
+          rc == 0 and "Smith2019 ¶1 ·" in out and "Smith2019 ¶2" not in out, out.strip()[-70:])
+    spm = fresh_import("short_paras", os.path.join(draft, "scripts"))
+    fns = (spm.footnote("4 Existing pension laws and regulations focus on contributions (Rauh, 2006)."),
+           spm.footnote("8. Another stream of literature focuses on over-investment (Jensen 1986)."),
+           spm.footnote("2008 was a hard year for plans (Rauh, 2009; Bartram, 2018)."),
+           spm.footnote("Prior studies find that relief lowers contributions (Rauh, 2006)."))
+    check("short_paras (1.6.1): a footnote kept as a paragraph ('4 Existing ...') is no candidate; a year is not "
+          "a footnote mark", fns == (True, True, False, False), str(fns))
+    sec = os.path.join(draft, "references", "sections", "litrev")
+    w(os.path.join(sec, "00-skeleton.md"),
+      "# litrev\n\n## 1. The Version router\n\n| Version | Use |\n|---|---|\n| 12 | stream in one sentence |\n\n"
+      "## 2. Arc\n\ntext\n")
+    w(os.path.join(sec, "03-evidence.md"),
+      "# 03 evidence\n\n### Version 12 · The stream compressed into one sentence\n"
+      "Pattern        `Prior studies <verb> that <fact> (<keys>).`\n"
+      "Example        \"Prior studies document that funding relief changes sponsor behavior (Smith, 2019; Lee "
+      "and Kim, 2020; Brown et al., 2015).\"   — Smith2019 ¶1\n"
+      "Use it when    the fact matters, not the estimate\nNot this when  one study carries the claim\n\n---\n")
+    bank = w(os.path.join(sec, "short-exemplars.md"),
+             "# short-paragraph bank\n\n## Version 12 (03-evidence)\n- Smith2019 ¶1 · 70 words · 3 citations\n  > "
+             + p1 + "\n")
+    rc1, o1 = run([dc, "version-card", "litrev/03-evidence.md", "12", "--full"])
+    rc2, o2 = run([dc, "router", "litrev"])
+    check("version-card --full: the whole corpus paragraph and the bank entry; router prints its table",
+          rc1 == 0 and "FULL PARAGRAPHS" in o1 and "These studies leave open" in o1 and "SHORT-PARAGRAPH BANK" in o1
+          and rc2 == 0 and "| 12 | stream in one sentence |" in o2, (o1 + o2).strip()[-80:])
+    bank0 = open(bank, encoding="utf-8").read()
+    w(bank, bank0.replace("## Version 12 (03-evidence)", "## Version 12 (02-mechanism)\n- Lee2020 ¶3 · 60 words · 2 "
+                          "citations\n  > MECHANISM ENTRY\n\n## Version 12 (03-evidence)", 1))
+    rc3, o3 = run([dc, "version-card", "litrev/03-evidence.md", "12", "--full"])
+    w(bank, bank0)
+    check("version-card --full (1.6.1): the bank entry of THIS part's Version, not another part's same number",
+          rc3 == 0 and "These studies leave open" in o3.split("SHORT-PARAGRAPH BANK")[-1]
+          and "MECHANISM ENTRY" not in o3, o3.strip()[-80:])
+    rc1, o1 = run([sp, "litrev", "--check"])
+    w(bank, open(bank, encoding="utf-8").read().replace("leave open", "leave unclear"))
+    rc2, o2 = run([sp, "litrev", "--check"])
+    check("short_paras --check: a verbatim bank passes, an edited paragraph is NOT VERBATIM",
+          rc1 == 0 and rc2 == 1 and "NOT VERBATIM" in o2, (o1 + o2).strip()[-70:])
+
+    st = os.path.join(draft, "scripts", "state.py")
+    rows = w(os.path.join(d, "rows.txt"), "Map2021 | find | owner | We find that under MAP-21 | corpus:5\n"
+                                           "Lee2020 | show | owner | use rose | corpus:3\n")
+    rc1, o1 = run([st, "cache", "--from", rows])
+    rc2, o2 = run([st, "list", "Map2021"])
+    check("state.py cache --from: several source-line rows in one write",
+          rc1 == 0 and "recorded 2 row(s)" in o1 and "We find that under MAP-21" in o2, (o1 + o2).strip()[-60:])
+
+    coh = os.path.join(lit, "scripts", "cohesion.py")
+    rc1, o1 = run([coh, "Plans cut contributions after the relief. Sponsors kept the cash. Cash rose in the year of the relief."])
+    rc2, o2 = run([coh, "Plans cut contributions after the relief. Sponsors kept the cash. Cash rose in the year. "
+                        "Investment did not change. The cash stayed on the balance sheet."])
+    check("cohesion: a 3-4 sentence paragraph's tails are advisory; a 5-sentence one is not flagged so",
+          rc1 == 0 and "SHORT PARAGRAPH (3-4 sentences)" in o1 and rc2 == 0 and "SHORT PARAGRAPH" not in o2,
+          (o1 + o2).strip()[-60:])
+    rc, out = run([os.path.join(lit, "scripts", "measure_register.py"), "--section", "litrev"])
+    check("measure_register --section: one chapter's register from the draft slices",
+          rc == 0 and "section=litrev" in out and "S3." in out and "finds" in out, out.strip()[-60:])
+
+    t0 = fresh_import("tier0_accept", sc)
+
+    class _F(object):
+        pass
+    fl = _F()
+    fl.lit = os.path.join(d, "fakelit")
+    w(os.path.join(fl.lit, "references", "corpus", "Rev2020.txt"),
+      "Pension Funding: A Review of the Literature\n\nAbstract\n\nWe review the evidence on pension funding.\n")
+    w(os.path.join(fl.lit, "references", "corpus", "Res2020.txt"),
+      "Pension Funding and Investment\n\nAbstract\n\nWe find that relief lowers contributions.\n")
+    check("tier0_accept: a paper that calls itself a review is listed as a candidate, a research paper not",
+          t0.looks_like_review(fl, "Rev2020") and not t0.looks_like_review(fl, "Res2020"))
+
+    # onboarding that reuses an earlier corpus's text and adds uncited papers
+    extra = w(os.path.join(d, "extra.csv"), "key,path,group,role,note\nExtra2024,extra2024.txt,,research,uncited\n")
+    w(os.path.join(d, "extra2024.txt"), "Extra Paper\n\nAbstract\n\n" + "We find that the extra effect holds. " * 80)
+    sk8 = os.path.join(d, "skills")
+    os.makedirs(sk8)
+    rc, out = run([os.path.join(sc, "onboard.py"), "--manuscript", os.path.join(root, "paper", "main.tex"),
+                   "--library", os.path.join(root, "library", "pdfs"),
+                   "--library", os.path.join(root, "library", "refs.bib"), "--notes", os.path.join(root, "notes"),
+                   "--field", "fx8", "--keywords", "workplace injury", "--dest", sk8,
+                   "--reuse-corpus", corpus, "--extra-map", extra])
+    c8 = os.path.join(sk8, "fx8-lit", "references", "corpus")
+    same = (os.path.isfile(os.path.join(c8, "Smith2019.txt")) and
+            open(os.path.join(c8, "Smith2019.txt"), "rb").read() == open(os.path.join(corpus, "Smith2019.txt"), "rb").read())
+    mrows = list(__import__("csv").DictReader(open(os.path.join(sk8, "fx8-lit", "references", "corpus_map.csv"),
+                                                   encoding="utf-8")))
+    check("onboard --reuse-corpus copies the old text byte for byte; --extra-map adds an uncited paper",
+          rc == 0 and same and os.path.isfile(os.path.join(c8, "Extra2024.txt"))
+          and any(r["key"] == "Smith2019" and r["path"].endswith(".txt") for r in mrows)
+          and re.search(r"\d+ of them reused as text; 1 extra", out), out.strip()[-90:])
+
+    # a review article leaves the style sample but stays for terms
+    cfgp = os.path.join(lit, "references", "field-config.yaml")
+    before = open(cfgp, encoding="utf-8").read()
+    w(cfgp, before.rstrip("\n") + "\n\nreviews:\n  - Garcia2018   # review essay\n")
+    rc, out = run([os.path.join(lit, "scripts", "build_corpus_meta.py")])
+    meta = open(os.path.join(lit, "references", "corpus_meta.yaml"), encoding="utf-8").read()
+    blk = re.search(r"- id: Garcia2018\n((?:    .*\n)+)", meta)
+    check("reviews: a listed review article is role review_article, terminology-safe, NOT style-safe",
+          rc == 0 and blk and "role: review_article" in blk.group(1) and "style_safe: false" in blk.group(1)
+          and "terminology_safe: true" in blk.group(1), (blk.group(1)[:80] if blk else out.strip()[-60:]))
+    w(cfgp, before)
+    run([os.path.join(lit, "scripts", "build_corpus_meta.py")])
+
+
+def v161(tmp):
+    print("\npart 9: 1.6.1 -- seed_from.py --tier 2 (reuse an older build's A2 verdicts)")
+    sc = os.path.join(FACTORY, "scripts")
+    root = os.path.join(tmp, "p9")
+    skills = os.path.join(root, "skills")
+
+    def w(path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        return path
+
+    os.makedirs(skills)
+    rc, out = run([os.path.join(sc, "stamp.py"), "fx9", "--dest", skills])
+    lit, draft = os.path.join(skills, "fx9-lit"), os.path.join(skills, "fx9-draft")
+    for d in (lit, draft):
+        p = os.path.join(d, "references", "field-config.yaml")
+        t = open(p, encoding="utf-8").read()
+        w(p, t.replace("\njobs:\n", "\njobs:\n  - introduction\n  - results\n", 1))
+    text = "Title\n1 Introduction\nprose\n2 Results\nprose\n"
+    old = os.path.join(root, "old-draft")
+    oc = os.path.join(root, "old-corpus")
+    for k, t_new, t_old in (("PaperA", text, text), ("PaperB", text, text), ("PaperC", text, text + "x\n")):
+        w(os.path.join(lit, "references", "corpus", k + ".txt"), t_new)
+        w(os.path.join(oc, k + ".txt"), t_old)
+    pipe = os.path.join(draft, "pipeline")
+    w(os.path.join(pipe, "sample-keys.txt"), "PaperA\nPaperB\nPaperC\n")
+    cand = {k: {"candidates": [{"line": 2}, {"line": 4}]} for k in ("PaperA", "PaperB", "PaperC")}
+    w(os.path.join(pipe, "a1_candidates.json"), json.dumps(cand))
+    w(os.path.join(old, "pipeline", "a2_out_wave1.tsv"),
+      "PaperA\t2\tintroduction\tH\topening\nPaperA\t4\tOTHER\tM\tunsure\n"
+      "PaperB\t2\tintroduction\tH\topening\n"
+      "PaperC\t2\tintroduction\tH\topening\nPaperC\t4\tresults\tH\tfindings\n")
+    w(os.path.join(old, "pipeline", "a2_out_zfix.tsv"), "PaperA\t4\tresults\tH\tA3 fix\n")
+    seed = [os.path.join(sc, "seed_from.py"), "fx9", "--from", old, "--tier", "2", "--old-corpus", oc,
+            "--dest", skills]
+    rc, out = run(seed)
+    tsv = os.path.join(pipe, "a2_out_wave0_seed.tsv")
+    got = open(tsv, encoding="utf-8").read() if os.path.isfile(tsv) else ""
+    sd = json.load(open(os.path.join(pipe, "a2_seeded.json"), encoding="utf-8")) if rc == 0 else {}
+    check("seed_from: identical text -> IMPORT (or PARTIAL, a new candidate left to A2); other text -> REREAD",
+          rc == 0 and "IMPORT 1 · PARTIAL 1 · REREAD 1" in out
+          and re.search(r"PARTIAL\s+PaperB\s+1 verdicts imported; 1 of 2", out)
+          and re.search(r"REREAD\s+PaperC\s+corpus text differs", out) and "PaperC" not in got
+          and sd.get("PaperB", {}).get("lines") == [2] and set(sd) == {"PaperA", "PaperB"},
+          out.strip()[-90:])
+    check("seed_from: the later correction file wins (PaperA L4 = results from a2_out_zfix.tsv)",
+          re.search(r"^PaperA\t4\tresults\tH\tseed a2_out_zfix\.tsv", got, re.M) is not None, got[-80:])
+    w(os.path.join(old, "pipeline", "a2_out_wave2.tsv"), "PaperA\t2\tmodel\tH\tderivation\n")
+    rc1, o1 = run(seed + ["--dry-run"])
+    rc2, o2 = run(seed + ["--dry-run", "--job-map", "model=introduction"])
+    check("seed_from: an old job the new taxonomy lacks stops the import unless --job-map names it",
+          rc1 != 0 and "the old taxonomy has jobs the new one lacks: model" in o1
+          and rc2 == 0 and "model=introduction" in o2 and "dry run" in o2, (o1 + o2).strip()[-90:])
+    w(os.path.join(draft, "references", "sample.md"), "| wave | key |\n|---|---|\n| 1 | `PaperA` |\n"
+      "| 1 | `PaperB` |\n| 2 | `PaperC` |\n")
+    for k in ("PaperA", "PaperB", "PaperC"):
+        cand[k].update(format="A", total_lines=5, ref_cutoff=5)
+        for c in cand[k]["candidates"]:
+            c.update(level=1, pattern="P1-num", verbatim="x", title="x")
+    w(os.path.join(pipe, "a1_candidates.json"), json.dumps(cand))
+    rc, out = run([os.path.join(pipe, "a2_build.py")])
+    w1 = open(os.path.join(pipe, "a2_wave1.md"), encoding="utf-8").read() if os.path.isfile(
+        os.path.join(pipe, "a2_wave1.md")) else ""
+    check("a2_build: a fully seeded paper is in no wave file; a PARTIAL one keeps only its unseeded line",
+          rc == 0 and "1 need no reading, 1 keep" in out and "## PaperB" in w1 and "## PaperA" not in w1
+          and "### L4 " in w1 and "### L2 " not in w1, out.strip()[-80:])
+
+    # ---- --tier 3: PASS1 records, paper by paper
+    w(os.path.join(lit, "references", "corpus", "PaperD.txt"), text)
+    w(os.path.join(oc, "PaperD.txt"), text)
+    p1 = "Prior studies find that sponsors cut contributions when funding rules are relaxed by Congress."
+    p2 = "We therefore expect relief to lower contributions most for the most underfunded plans."
+    body = {"PaperA": (p1 + "\n" + p2, p1 + "\r\n" + p2), "PaperB": ("2 Results and discussion\n" + p1 + "\n" + p2,
+                                                                 p1 + "\n" + p2),
+            "PaperC": (p1 + "\n" + p2, p1 + "\n" + p2), "PaperD": (p1 + "\nH2: Relief lowers contributions.\n" + p2,
+                                                                 p1 + "\n" + p2)}
+    recs = []
+    for k, (new_b, old_b) in body.items():
+        w(os.path.join(draft, "references", "slices", "results", k + ".txt"),
+          "===== %s | L2-4 | 2 Results\n%s\n" % (k, new_b))
+        w(os.path.join(old, "references", "slices", "results", k + ".txt"),
+          "===== %s | L2-4 | 2 Results\n%s\n" % (k, old_b))
+        recs.append('### %s  Results 2 paragraphs [titled `2 Results`]\n\n¶1 reviews what sponsors do\n> "%s"\n'
+                    '1 sentence\n\n¶2 states the expectation\n> "%s"\n1 sentence\n' % (k, p1, p2))
+    w(os.path.join(old, "references", "records", "results.md"), "\n---\n\n".join(recs))
+    t3 = [os.path.join(sc, "seed_from.py"), "fx9", "--from", old, "--tier", "3", "--chapter", "results",
+          "--old-corpus", oc, "--dest", skills]
+    rc, out = run(t3)
+    sh = os.path.join(draft, "references", "records", "_shards")
+    imp = open(os.path.join(sh, "results-00.md"), encoding="utf-8").read() if rc == 0 else ""
+    rr = open(os.path.join(sh, "results-reread.txt"), encoding="utf-8").read().split() if rc == 0 else []
+    check("seed_from --tier 3: same slice lines (CRs aside) or only an added heading -> IMPORT; other text "
+          "or an added sentence -> REREAD",
+          rc == 0 and "IMPORT 2 · REREAD 2" in out and "### PaperA" in imp and "### PaperB" in imp
+          and "### PaperC" not in imp and sorted(rr) == ["PaperC", "PaperD"]
+          and "adds 1 heading line(s): 2 Results and discussion" in out, out.strip()[-90:])
+    rc, out = run([os.path.join(pipe, "verify_shards.py")])
+    check("seed_from --tier 3: the imported shard passes verify_shards.py", rc == 0 and "results-00.md" in out
+          and "STALE" not in out, out.strip()[-80:])
+
+
+def v162(tmp):
+    print("\npart 10: 1.6.2 -- recount.py reads annotated count lines; check_drift chapter detail")
+    sc = os.path.join(FACTORY, "scripts")
+    skills = os.path.join(tmp, "p10", "skills")
+    os.makedirs(skills)
+    run([os.path.join(sc, "stamp.py"), "fx10", "--dest", skills])
+    draft = os.path.join(skills, "fx10-draft")
+    rec = os.path.join(draft, "references", "records", "results.md")
+    os.makedirs(os.path.dirname(rec), exist_ok=True)
+    with open(rec, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("### PaperA  Results 4 paragraphs\n\n¶1 a\n> \"x\"\n3 sentences\n\n¶2 b\n> \"y\"\n"
+                 "3 sentences  [cut by a page break after `rises`]\n\n¶3 c\n> \"z\"\n"
+                 "3 sentences (footnote 4 breaks the third sentence)\n\n¶4 d\n> \"w\"\n5 sentences\n")
+    rc, out = run([os.path.join(draft, "pipeline", "recount.py")])
+    check("recount.py counts a count line followed by a note (a finance build lost 541 paragraphs)",
+          rc == 0 and "paragraphs counted  : 4" in out and "TRIPLES : 1/2" in out, out.strip()[-90:])
+    dreg = os.path.join(draft, "references", "registry.json")
+    d = json.load(open(dreg, encoding="utf-8"))
+    d["built_tiers"] = sorted(set(d["built_tiers"]) | {3})
+    d["sections"]["chapters"] = {"results": {"parts": 1, "versions": 0, "denominator": 1}}
+    json.dump(d, open(dreg, "w", encoding="utf-8"), indent=1)
+    rc, out = run([os.path.join(draft, "scripts", "check_drift.py")])
+    line = next((l for l in out.splitlines() if "registry sections.chapters recorded" in l), "")
+    check("check_drift: a recorded chapter list passes with its count, not the failure text",
+          line.lstrip().startswith("PASS") and "1 chapters" in line and "no chapter recorded" not in line,
+          line.strip()[:90])
+    corpus = os.path.join(skills, "fx10-lit", "references", "corpus")
+    os.makedirs(corpus, exist_ok=True)
+    for i in range(3):
+        with open(os.path.join(corpus, "Paper%d.txt" % i), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("Introduction\nWe find that sponsors contribute less after relief. Prior work "
+                     "shows that funding rules bind. These results are consistent with risk shifting.\n")
+    rc, out = run([os.path.join(draft, "scripts", "measure_verbs.py"), "--write"])
+    vl = os.path.join(draft, "references", "verb-ladder.md")
+    head = open(vl, encoding="utf-8").read()[:400] if os.path.exists(vl) else ""
+    check("measure_verbs.py --write writes verb-ladder.md naming the -lit corpus it read",
+          rc == 0 and "`../fx10-lit/references/corpus/`" in head and "3 篇 style-safe" in head,
+          (out.strip()[-80:] if rc else head[:80]).replace("\n", " "))
+
+
 def main():
     keep = "--keep" in sys.argv
     tmp = tempfile.mkdtemp(prefix="cb-selftest-")
     try:
         # a crash is a FAIL, never an abort -- run against an OLD factory the
         # suite must still report every check it can (qualification run)
-        for part in (unit_tests, integration, onboard_polish, canon_tier4, review_fixes, v140):
+        for part in (unit_tests, integration, onboard_polish, canon_tier4, review_fixes, v140, v150, v160, v161, v162):
             try:
                 part(tmp)
             except Exception as e:  # noqa: BLE001

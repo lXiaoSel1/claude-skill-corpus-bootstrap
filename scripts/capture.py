@@ -4,11 +4,13 @@
 The parents' register-measurements.md / cohesion-measurements.md are framed
 captures of their measurement scripts' output. This does the mechanical part
 for an instance: run the script, wrap stdout in a dated fenced block, write
-the artifact.
+the artifact. Arguments after the artifact name go to the script (1.6.0),
+e.g. one chapter's register from its slices after Tier 2.
 
 RUN
     py -3 scripts/capture.py <instance> measure_register.py register-measurements.md
     py -3 scripts/capture.py <instance> build_cohesion_norms.py cohesion-measurements.md
+    py -3 scripts/capture.py <instance> measure_register.py register-<job>.md --section <job>
 """
 import datetime
 import os
@@ -21,24 +23,26 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 def main():
-    if len(sys.argv) != 4:
+    if len(sys.argv) < 4:
         sys.exit(__doc__)
     inst, script, outname = sys.argv[1:4]
+    extra = sys.argv[4:]
     inst = os.path.abspath(inst)
     spath = os.path.join(inst, "scripts", script)
-    r = subprocess.run([sys.executable, "-B", spath], capture_output=True,
+    r = subprocess.run([sys.executable, "-B", spath] + extra, capture_output=True,
                        text=True, encoding="utf-8", errors="replace",
                        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     if r.returncode != 0:
         sys.exit("%s failed:\n%s" % (script, r.stderr[-800:]))
     out = os.path.join(inst, "references", outname)
+    cmd = " ".join(["scripts/" + script] + extra)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("# %s — GENERATED capture (%s)\n\n" % (outname,
                  datetime.date.today().isoformat()))
-        fh.write("> Captured from: py -3 scripts/%s — a Tier-1 acceptance"
+        fh.write("> Captured from: py -3 %s — a Tier acceptance"
                  " artifact.\n> Re-run this capture whenever the corpus"
                  " changes; the numbers below are\n> this instance's corpus"
-                 " truth, superseding any parent illustration.\n\n" % script)
+                 " truth, superseding any parent illustration.\n\n" % cmd)
         fh.write("```\n" + r.stdout + "\n```\n")
     print("captured -> %s (%d lines)"
           % (os.path.relpath(out, inst), len(r.stdout.split("\n"))))

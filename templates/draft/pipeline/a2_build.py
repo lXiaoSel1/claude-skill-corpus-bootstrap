@@ -41,6 +41,21 @@ if unwaved:
     sys.exit("papers in a1_candidates.json with no wave in sample.md: %s"
              "\n  fix: py -3 pipeline/make_sample.py" % ", ".join(unwaved[:10]))
 
+# FACTORY 1.6.1: candidate lines whose verdicts corpus-bootstrap's seed_from.py
+# imported from an older build (a2_seeded.json, with a2_out_wave0_seed.tsv) are
+# not read again; a paper left with no candidate, and a wave left with no
+# paper, write nothing.
+_SEEDED = os.path.join(BASE, "a2_seeded.json")
+seeded = json.load(open(_SEEDED, encoding='utf-8')) if os.path.exists(_SEEDED) else {}
+for _k, _s in seeded.items():
+    if _k in d:
+        _done = set(_s.get("lines", [c['line'] for c in d[_k]['candidates']]))
+        d[_k]['candidates'] = [c for c in d[_k]['candidates'] if c['line'] not in _done]
+_full = [k for k in seeded if k in d and not d[k]['candidates']]
+if seeded:
+    print(f"{len(seeded)} papers seeded from an older build (a2_seeded.json): "
+          f"{len(_full)} need no reading, {len(seeded) - len(_full)} keep their new candidates")
+
 def body_after(lines, cand):
     """Text following the heading. For glued headings the body continues on the
     SAME line right after the title; for bare headings it starts on the next."""
@@ -58,7 +73,10 @@ def body_after(lines, cand):
     return re.sub(r'\s+', ' ', buf).strip()[:FOLLOW]
 
 for w in sorted(set(wave.values())):
-    keys = [k for k in d if wave.get(k) == w]
+    keys = [k for k in d if wave.get(k) == w and d[k]['candidates']]
+    if not keys:
+        print(f"wave {w}: every paper seeded, no file")
+        continue
     out = [f"# A2 input - wave {w} ({len(keys)} papers)\n"]
     n = 0
     for k in keys:

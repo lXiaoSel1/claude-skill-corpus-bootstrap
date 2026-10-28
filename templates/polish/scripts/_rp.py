@@ -71,6 +71,10 @@ COMMENT_RE = re.compile(r"(?<!\\)%.*$")
 CITE_KEYS_RE = _msmod.CITE_KEYS_RE     # natbib and biblatex commands (manuscript.py)
 CITE_ANY_RE = _msmod.CITE_ANY_RE
 _LABEL_ONLY = re.compile(r"^\s*\\label\{[^}]*\}\s*$")
+# a reading note's cite key and PDF folder in its front matter (onboard.py reads the same)
+_FRONT_KEY = re.compile(r"^\s*(?:bib_key|bibkey|citekey|cite_key|citation_key|key)\s*[:：]\s*['\"]?([^\s'\"]+)",
+                        re.M | re.I)
+_PDF_DIR = re.compile(r"^\s*(?:PDF路径|PDF目录|pdf_dir|pdf_path|pdf_folder)\s*[:：]\s*(.+?)\s*$", re.M | re.I)
 
 
 def die(msg, code=2):
@@ -125,6 +129,7 @@ class Ctx(object):
         self._ms = None
         self._opts = None
         self._lit_cfg = None
+        self._note_keys = None
 
     # ---- sibling instances -------------------------------------------------
     def lit_scripts(self):
@@ -289,6 +294,12 @@ class Ctx(object):
         return data.get("keys", data)
 
     def note_path(self, key):
+        """The reading note of a cite key: the one onboarding matched (library
+        index note_file), else <KEY>.md under the notes folder, else the note
+        whose front matter says bib_key: KEY (or citekey / key)."""
+        rec = self.library_index().get(key) or {}
+        if rec.get("note_file") and os.path.isfile(rec["note_file"]):
+            return rec["note_file"]
         nd = self.opts["notes_dir"] or self.library_index_meta().get("notes_dir", "")
         if not nd:
             return None
@@ -296,7 +307,18 @@ class Ctx(object):
         for root, _, files in os.walk(nd):
             if key + ".md" in files:
                 return os.path.join(root, key + ".md")
-        return None
+        if self._note_keys is None:
+            self._note_keys = {}
+            for root, _, files in os.walk(nd):
+                for f in sorted(files):
+                    if f.endswith(".md"):
+                        p = os.path.join(root, f)
+                        with open(p, encoding="utf-8", errors="replace") as fh:
+                            head = fh.read(3000)
+                        m = _FRONT_KEY.search(head.split("\n---", 1)[0]) if head.startswith("---") else None
+                        if m:
+                            self._note_keys.setdefault(m.group(1), p)
+        return self._note_keys.get(key)
 
     def library_index_meta(self):
         p = _abs(self.opts["library_index"], self.ms.dir)
@@ -315,13 +337,20 @@ class Ctx(object):
         if note:
             field = self.opts["notes_pdf_field"]
             # the configured field, or the names onboarding also accepts
-            m = re.search(r"^\s*(?:%s|pdf|PDF|file|对应PDF)\s*[:：]\s*(.+)$" % re.escape(field),
-                          _read(note), re.M)
+            text = _read(note)
+            m = re.search(r"^\s*(?:%s|pdf|PDF|file|对应PDF)\s*[:：]\s*(.+)$" % re.escape(field), text, re.M)
             if m:
-                p = m.group(1).strip().strip("'\"")
-                p = _abs(p, os.path.dirname(note))
+                v = m.group(1).strip().strip("'\"")
+                p = _abs(v, os.path.dirname(note))
                 if os.path.isfile(p):
                     return p, "note"
+                d = _PDF_DIR.search(text)         # a file name, with the folder in its own field
+                if d:
+                    folder = _abs(d.group(1).strip().strip("'\""), os.path.dirname(note))
+                    want = re.sub(r"[^0-9a-z]+", "", os.path.basename(v).lower())
+                    for f in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+                        if re.sub(r"[^0-9a-z]+", "", f.lower()) == want:   # spaces and punctuation aside
+                            return os.path.join(folder, f), "note"
                 return None, "note's PDF path does not exist: " + p
             return None, "note has no %s: field" % field
         return None, "no PDF in the library index and no reading note"
@@ -338,10 +367,49 @@ class Ctx(object):
         return "", how
 
     def page_label(self, key, offset):
-        """"p.N" for an offset in source_text(key) when that text is the PDF's,
-        else "" (the lit corpus copy has no pages)."""
+        """"p.N" for an offset in source_text(key) when that text is the PDF's
+        (N counts the file's pages from 1), with the printed page when one is
+        known: "p.16 (printed 988)". "" for the lit corpus copy, which has no
+        pages."""
         pdf, _ = self.pdf_for(key)
-        return "p.%d" % pdf_page(pdf, offset) if pdf else ""
+        if not pdf:
+            return ""
+        n = pdf_page(pdf, offset)
+        printed = printed_pages(pdf, self.bib_pages().get(key))[0]
+        pr = printed[n - 1] if 0 < n <= len(printed) else ""
+        return "p.%d (printed %s)" % (n, pr) if pr and pr != str(n) else "p.%d" % n
+
+    def pdf_notes(self, key):
+        """What a reader of this paper's search results must know: where the
+        printed page numbers come from, a PDF that is not the version of
+        record, pages with no text layer (not searched)."""
+        pdf, _ = self.pdf_for(key)
+        if not pdf:
+            return []
+        printed, how, version = printed_pages(pdf, self.bib_pages().get(key))
+        out = []
+        if how:
+            out.append("printed pages from %s" % how)
+        if version:
+            out.append("%s: not the version of record, so its pages are not the journal's" % version)
+        blank = pdf_blank_pages(pdf)
+        if blank:
+            out.append("page(s) %s have no text layer (scanned pages or image-only tables): not searched"
+                       % ", ".join(str(b) for b in blank))
+        return out
+
+    def bib_pages(self):
+        """{cite key: (first page, last page)} from the .bib files' pages fields."""
+        if getattr(self, "_bib_pages", None) is None:
+            self._bib_pages = {}
+            for b in self.ms.bib_files:
+                if not os.path.isfile(b):
+                    continue
+                for m in re.finditer(r"@\w+\s*\{\s*([^,\s]+)\s*,(.*?)(?=\n\s*@|\Z)", _read(b), re.S):
+                    pm = re.search(r"\bpages\s*=\s*[{\"]\s*(\d+)\s*[-–—]+\s*(\d+)", m.group(2), re.I)
+                    if pm:
+                        self._bib_pages[m.group(1)] = (int(pm.group(1)), int(pm.group(2)))
+        return self._bib_pages
 
 
 def _read(path):
@@ -370,8 +438,63 @@ def _pdf(path):
             die("PyMuPDF is needed to read PDFs: py -3 -m pip install pymupdf")
         with fitz.open(path) as d:
             pages = [p.get_text() for p in d]
-        _PDF_CACHE[path] = {"pages": pages, "text": normalize("\n".join(pages)), "starts": None}
+            labels = [p.get_label() for p in d]
+        _PDF_CACHE[path] = {"pages": pages, "labels": labels, "text": normalize("\n".join(pages)),
+                            "starts": None, "printed": {}}
     return _PDF_CACHE[path]
+
+
+_NOT_OF_RECORD = re.compile(r"\b(Author Accepted Manuscript|Accepted Manuscript|Author manuscript|"
+                            r"HHS Public Access|NBER WORKING PAPER|Working Paper|preprint)\b", re.I)
+
+
+def printed_pages(path, bib_pages=None):
+    """([printed page or "" per file page], where they come from, version) for
+    a PDF. Printed pages come from the PDF's own page labels when they differ
+    from the file's page numbers, else from a page number in the first or last
+    three lines of each page that rises by one from page to page (offset
+    agreed by half the pages), else from the .bib pages field when its span
+    equals the file's page count (or the count less a cover page). version
+    names a first page that says the PDF is a manuscript, working paper or
+    preprint ("" otherwise)."""
+    c = _pdf(path)
+    if bib_pages in c["printed"]:
+        return c["printed"][bib_pages]
+    pages, n = c["pages"], len(c["pages"])
+    # a label that is a page number (arabic or roman, perhaps bracketed), not "image 6"
+    labels = [l if re.match(r"^[\[(]?(?:\d+|[ivxlcdm]+)[\])]?$", l or "", re.I) else "" for l in c["labels"]]
+    m = _NOT_OF_RECORD.search(" ".join(pages[:1])[:3000])
+    version = m.group(1) if m else ""
+    printed, how = [""] * n, ""
+    if any(l and l != str(i + 1) for i, l in enumerate(labels)):
+        printed, how = labels, "the PDF's page labels"
+    else:
+        from collections import Counter
+        offsets = Counter()
+        for i, t in enumerate(pages):
+            lines = [l.strip() for l in t.splitlines() if l.strip()]
+            for l in lines[:3] + lines[-3:]:
+                mm = re.match(r"^(?:Page\s+)?(\d{1,4})(?:\s+of\s+\d+)?$", l, re.I)
+                if mm:
+                    offsets[int(mm.group(1)) - (i + 1)] += 1
+        best = [o for o, k in offsets.most_common(1) if k >= max(2, n // 2)]
+        if best and best[0] != 0:            # unnumbered front pages get no printed page
+            printed = [str(i + 1 + best[0]) if i + 1 + best[0] >= 1 else "" for i in range(n)]
+            how = "page numbers printed on the pages"
+        elif bib_pages and not version:        # a manuscript's pages are not the journal's
+            span = bib_pages[1] - bib_pages[0] + 1
+            if span == n:
+                printed, how = [str(bib_pages[0] + i) for i in range(n)], "the .bib pages field"
+            elif span == n - 1:
+                printed = [""] + [str(bib_pages[0] + i) for i in range(n - 1)]
+                how = "the .bib pages field (page 1 is a cover page)"
+    c["printed"][bib_pages] = (printed, how, version)
+    return c["printed"][bib_pages]
+
+
+def pdf_blank_pages(path):
+    """File page numbers whose text layer holds under 50 characters."""
+    return [i + 1 for i, t in enumerate(_pdf(path)["pages"]) if len(t.strip()) < 50]
 
 
 def pdf_text(path):

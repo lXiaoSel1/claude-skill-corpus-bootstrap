@@ -219,9 +219,9 @@ def write(rows, prows, n_papers, words):
     L = ["# verb-ladder.md — 归因动词阶梯"
          "（**全部实测，无一条是"
          "设计出来的**）", "",
-         "> 来源：`../%s-lit/references/corpus/`，"
+         "> 来源：`%s/`，"
          "**%d 篇 style-safe**，{:,} 词。".format(words)
-         % (_field, n_papers),
+         % (os.path.relpath(CORPUS, SKILL).replace(os.sep, "/"), n_papers),
          "> 生成：`py -3 scripts/measure_verbs.py --write`。"
          "**这个文件不手写**——"
          "母本的阶梯是手工 grep 出来的，",

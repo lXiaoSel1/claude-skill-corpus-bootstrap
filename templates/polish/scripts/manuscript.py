@@ -7,6 +7,10 @@ A section (the unit every polish step works on) is either
   * in a single-file manuscript, the stretch between two headings at the split
     level (default \\section; polish.yaml `split_level: subsection` changes it;
     key = the heading's \\label without its prefix, else a slug of the title).
+When the main file holds prose of its own under two or more headings, its
+heading ranges are the sections even if it \\input's files: an input file that
+is a table or figure stays inside its section, and one that holds prose is a
+section of its own.
 
 Also read from the main file: citation aliases (\\defcitealias), the
 bibliography files (\\bibliography / \\addbibresource) and the compiled .bbl
@@ -55,6 +59,24 @@ def _slug(title):
     s = re.sub(r"\\[a-zA-Z]+\*?", " ", title)
     s = re.sub(r"[^A-Za-z0-9]+", "-", s).strip("-").lower()
     return s or "section"
+
+
+_FLOAT_ENV = re.compile(r"\\begin\{(table|figure|sidewaystable|sidewaysfigure|longtable|tabular[x*]?|"
+                        r"threeparttable|landscape)\*?\}.*?\\end\{\1\*?\}", re.S)
+
+
+def _prose_words(text):
+    """Words of running text: commands, maths and braces removed."""
+    t = re.sub(r"\$[^$]*\$", " ", text)
+    t = re.sub(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?", " ", t)
+    return len(re.findall(r"(?<![A-Za-z])[A-Za-z]{2,}", t))
+
+
+def _is_float_file(path):
+    """An \\input file that is a table or figure: under 50 words of prose
+    once its float environments are removed."""
+    text = "\n".join(_COMMENT.sub("", ln) for ln in _read(path).splitlines())
+    return _prose_words(_FLOAT_ENV.sub(" ", text)) < 50
 
 
 class Section(object):
@@ -147,9 +169,49 @@ class Manuscript(object):
                               lab.group(1) if lab else ""))
             for m in _INPUT.finditer(code):
                 inputs.append((i, self._resolve_input(m.group(1))))
-        if inputs:
+        if not inputs:
+            return self._range_sections(heads)
+        if not self._main_has_prose(heads):
             return self._file_sections(heads, inputs)
-        return self._range_sections(heads)
+        # prose in the main file itself (tables or figures \input from files):
+        # sections are its heading ranges; an input file is a section of its
+        # own only when it holds prose, never when it is a float
+        prose_inputs = [(ln, p) for ln, p in inputs if os.path.isfile(p) and not _is_float_file(p)]
+        prose_lines = {ln for ln, _ in prose_inputs}
+        out = []
+        for s in self._range_sections(heads):
+            own = [t for i, t in s.lines() if i not in prose_lines]
+            # a heading whose only content is a prose file: the file is the section
+            if any(s.first <= ln <= s.last for ln in prose_lines) and not _prose_words(
+                    "\n".join(_COMMENT.sub("", t) for t in own)):
+                continue
+            out.append(s)
+        seen = {s.key for s in out}
+        for s in self._file_sections(heads, prose_inputs):
+            base, k = s.key, 2
+            while s.key in seen:
+                s.key, k = "%s-%d" % (base, k), k + 1
+            seen.add(s.key)
+            out.append(s)
+        return out
+
+    def _main_has_prose(self, heads):
+        """True when two or more headings at the split level are followed, in
+        the main file itself, by 50 or more words of prose."""
+        if self.split_level not in LEVELS:
+            return False
+        top = LEVELS.index(self.split_level)
+        cuts = [h for h in heads if LEVELS.index(h[1]) <= top]
+        n = 0
+        for j, (ln, level, _, _) in enumerate(cuts):
+            if level != self.split_level:
+                continue
+            nxt = cuts[j + 1][0] - 1 if j + 1 < len(cuts) else len(self.lines)
+            own = "\n".join(_COMMENT.sub("", t) for t in self.lines[ln:nxt]
+                            if not _INPUT.search(_COMMENT.sub("", t)))
+            if _prose_words(own) >= 50:
+                n += 1
+        return n >= 2
 
     def _file_sections(self, heads, inputs):
         out, seen = [], set()
@@ -257,9 +319,10 @@ def main():
     lvl = sys.argv[sys.argv.index("--split-level") + 1] if "--split-level" in sys.argv else "section"
     ms = Manuscript(sys.argv[1], lvl)
     print("manuscript: %s" % ms.path)
+    kinds = {s.kind for s in ms.sections}
     print("sections (%d, %s):" % (len(ms.sections),
-                                  "input files" if ms.sections and ms.sections[0].kind == "file"
-                                  else "split at \\" + lvl))
+                                  "input files" if kinds == {"file"}
+                                  else "split at \\" + lvl + (" + input files" if "file" in kinds else "")))
     for s in ms.sections:
         print("  %-28s %-40s %s:%d-%d" % (s.key, (s.title or "")[:40],
                                           os.path.relpath(s.path, ms.dir), s.first, s.last))

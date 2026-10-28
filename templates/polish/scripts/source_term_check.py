@@ -67,6 +67,8 @@ for key, term in pairs:
 print("\nsources:")
 for key in texts:
     print("  %-24s %s" % (key, sources[key]))
+    for n in ctx.pdf_notes(key) if texts[key] else []:
+        print("  %-24s   note: %s" % ("", n))
 if missing:
     print("\n%d key(s) without text: %s" % (len(missing), ", ".join(sorted(missing))))
     sys.exit(1)

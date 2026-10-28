@@ -7,21 +7,35 @@ WHY THIS EXISTS
     SHAPE line, the ledger<->draft diff, the ownership regex, verb legality,
     Version existence.  All of these are mechanical definitions already stated
     in SKILL.md; this script computes them so the model spends its judgment on
-    C-C-C and warrants, not on counting.
+    C-C-C and warrants, not on counting.  `src` checks the cited papers
+    themselves: numbers and copied stretches against the corpus file or the
+    PDF (factory 1.6.0, ported from the parent's fast lane with `router` and
+    `version-card`).
 
-RUN  (paragraph text via a file, or - for stdin)
-    py -3 scripts/draftcheck.py para draft.txt          # sentences · traceable · cites · verbs
+RUN  (a paragraph is a file, - for stdin, or the paragraph text itself)
+    py -3 scripts/draftcheck.py para draft.txt [--chapter <job>]
+                                    # sentences · length vs the chapter's P90 · traceable · cites · verbs
     py -3 scripts/draftcheck.py own "<pasted source line>" [...]
     py -3 scripts/draftcheck.py version results/02-estimate.md 6
+    py -3 scripts/draftcheck.py version-card <job>/03-evidence.md 12 [--full]   # fast lane
+    py -3 scripts/draftcheck.py router <job>                                    # fast lane
     py -3 scripts/draftcheck.py numbers draft.txt tables/main.tex
     py -3 scripts/draftcheck.py section intro-draft.tex <chapter>
+    py -3 scripts/draftcheck.py src draft.txt       # numbers and copied stretches vs the cited papers
+    py -3 scripts/draftcheck.py src --line KEY "<pasted source line>"
+    py -3 scripts/draftcheck.py src --find KEY "<phrase or number>" [KEY "<phrase>" ...]
+                                    # is it in THAT paper's own text? exit 1 if any pair has no hit
 
 Manuscript and table paths come from field-config (`manuscript_tex`,
 `manuscript_tables`); citations are read from LaTeX \\cite{} and
 Markdown/pandoc [@key]; `section` is skipped where field-config sets
 `equation_layer: off` (prose fields), because its parenthesised-number proxy
-has no meaning there.
+has no meaning there. `version-card --full` prints, for each Example, the
+whole corpus paragraph it comes from (from the chapter's slices), and the
+chapter's short-paragraph bank entries for that Version when
+references/sections/<job>/short-exemplars.md exists.
 """
+import glob
 import json
 import os
 import re
@@ -34,6 +48,7 @@ if hasattr(sys.stdout, "reconfigure"):
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 REF = os.path.join(SKILL, "references")
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(SKILL, "pipeline"))
 import _jobs  # noqa: E402
 LIT = _jobs.lit_dir() or os.path.normpath(
@@ -42,16 +57,23 @@ if not os.path.exists(os.path.join(LIT, "scripts", "textseg.py")):
     sys.exit("lit instance not found at %s -- check lit_instance in"
              " field-config.yaml" % LIT)
 sys.path.insert(0, os.path.join(LIT, "scripts"))
-from textseg import split_sentences  # noqa: E402  (the shared splitter)
+from textseg import split_sentences, paragraph_texts  # noqa: E402  (the shared splitter)
+import _src  # noqa: E402
 
 # SKILL.md's traceable-sentence predicate, verbatim mechanical form:
-# numeral / percentage / comparative / directional verb.
+# numeral / percentage / comparative / directional verb. Word forms are
+# listed, so "risk" is not "rise" and "significantly" is "significant".
 TRACEABLE = re.compile(
     r"\d|\bpercent\b|%|\b(?:higher|lower|larger|smaller|greater|more|less|"
-    r"increas\w+|decreas\w+|declin\w+|ris\w+|fall\w+|grow\w+|shrink\w+|"
-    r"positive|negative|significant|insignificant)\b", re.I)
+    r"increas(?:e|es|ed|ing)|decreas(?:e|es|ed|ing)|declin(?:e|es|ed|ing)|"
+    r"ris(?:e|es|en|ing)|rose|fall(?:s|en|ing)?|fell|grow(?:s|n|ing|th)?|grew|"
+    r"shr(?:ink|inks|ank|unk|inking)|positive|negative|"
+    r"(?:in)?significant(?:ly)?)\b", re.I)
 
-CITE = re.compile(r"\\cite[tp]?\*?(?:\[[^\]]*\])*\{([^}]*)\}")
+# every citation command, natbib and biblatex, not \nocite (the pattern polish's
+# manuscript.py and lit's build_corpus_meta.py use)
+CITE_CMD = _src.CITE_CMD
+CITE = _src.CITE
 MD_CITE = re.compile(r"@([A-Za-z0-9][A-Za-z0-9_:\-]*)")   # pandoc [@key; @k2]
 
 # Attribution-verb legality (verb-ladder.md).  `report ... that` is flagged
@@ -66,29 +88,52 @@ LADDER = {"find", "finds", "show", "shows", "suggest", "suggests", "argue",
 # FACTORY PARAMETERIZATION: the author-year ownership regex assumes
 # Author (Year) citation culture.  Numeric-citation fields (IEEE [12])
 # get a bracket-detector instead, and ownership drops to judgment.
-import _fieldstyle
+import _fieldstyle  # noqa: E402
 OWNER = _fieldstyle.owner_re()
 
 NUM = re.compile(r"-?\d+(?:[.,]\d+)+|-?\d+(?:\.\d+)?%?")
 
 
 def read_arg(a):
+    """A file, - for stdin, or the paragraph text itself."""
     if a == "-":
         return sys.stdin.read()
-    with open(a, encoding="utf-8", errors="replace") as fh:
-        return fh.read()
+    if os.path.isfile(a):
+        with open(a, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    if len(a.split()) >= 3:
+        return a
+    sys.exit("not a file, and too short to be a paragraph: %r" % a)
 
 
 def strip_tex(s):
-    s = re.sub(r"%.*", "", s)
-    s = re.sub(r"\\cite[tp]?\*?(?:\[[^\]]*\])*\{[^}]*\}", "CITE", s)
+    s = re.sub(r"(?<!\\)%.*", "", s)
+    s = re.sub(CITE_CMD + r"\{[^}]*\}", "CITE", s)
     s = re.sub(r"\[@[^\]]*\]", "CITE", s)
     s = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])*(?:\{[^{}]*\})*", " ", s)
     return re.sub(r"[{}~]", " ", s)
 
 
-def cmd_para(path):
-    raw = read_arg(path)
+def chapter_p90(chapter):
+    """Words-per-sentence P90 of the chapter's corpus slices (all chapters
+    when none is named), split by the shared splitter; None without slices."""
+    root = os.path.join(REF, "slices")
+    paths = glob.glob(os.path.join(root, chapter, "*.txt")) if chapter else glob.glob(os.path.join(root, "*", "*.txt"))
+    lens = []
+    for p in paths:
+        if os.path.basename(p).startswith("_"):
+            continue
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            for para in paragraph_texts(fh.read(), min_chars=200):
+                lens += [n for n in (len(s.split()) for s in split_sentences(para)) if 3 <= n <= 150]
+    if not lens:
+        return None, 0
+    lens.sort()
+    return lens[int(0.9 * (len(lens) - 1))], len(lens)
+
+
+def cmd_para(arg, chapter):
+    raw = read_arg(arg)
     keys = sorted({k.strip() for m in CITE.findall(raw)
                    for k in m.split(",") if k.strip()}
                   | set(MD_CITE.findall(" ".join(re.findall(r"\[@[^\]]*\]",
@@ -97,10 +142,17 @@ def cmd_para(path):
     sents = [s for s in sents if len(s.split()) >= 3]
     traceable = [i for i, s in enumerate(sents, 1) if TRACEABLE.search(s)]
     rt = REPORT_THAT.findall(raw)
+    p90, n = chapter_p90(chapter)
+    words = [len([w for w in s.split() if w != "CITE"]) for s in sents]
     print("sentences: %d" % len(sents))
     for i, s in enumerate(sents, 1):
         mark = "T" if i in traceable else "."
-        print("  %s %2d  %s" % (mark, i, s[:100]))
+        over = "  OVER P90" if p90 and words[i - 1] > p90 else ""
+        print("  %s %2d  %3dw%s  %s" % (mark, i, words[i - 1], over, s[:100]))
+    if p90:
+        long_ = [i for i, w in enumerate(words, 1) if w > p90]
+        print("length: corpus P90 %d words (%s, %d sentences); over it: %s"
+              % (p90, chapter or "all chapters", n, long_ or "none"))
     print("traceable (need a ledger row): %d of %d -- %s"
           % (len(traceable), len(sents), traceable or "none"))
     print("cite keys (each needs a ledger row): %s" % (", ".join(keys) or "none"))
@@ -117,15 +169,15 @@ def cmd_para(path):
 
 def cmd_own(lines):
     for l in lines:
-        m = OWNER.search(l)
-        if m:
-            print("THIRD-PARTY  hit=%r  %s" % (m.group(0), l[:90]))
+        hits = [m.group(0) for m in OWNER.finditer(l)]
+        if hits:
+            print("THIRD-PARTY  hits=%r  %s" % (hits, l[:90]))
         else:
             print("clean        %s" % l[:90])
 
 
 def cmd_version(part, n):
-    path = os.path.join(SKILL, "references", "sections", part)
+    path = os.path.join(REF, "sections", part)
     if not os.path.exists(path):
         print("NO SUCH PART FILE:", part); sys.exit(1)
     with open(path, encoding="utf-8", errors="replace") as fh:
@@ -137,6 +189,142 @@ def cmd_version(part, n):
         have = re.findall(r"(?m)^### Version (\d+)", text)
         print("NO Version %s in %s -- it has: %s" % (n, part, ", ".join(have)))
         sys.exit(1)
+
+
+FIELD = re.compile(r"^(Pattern|Example|Use it when|Not this when)\b\s*(.*)$")
+EXAMPLE = re.compile(r"[\"“](.+?)[\"”]\s*(?:—|--|-)\s*([A-Za-z0-9_][\w\-]*)(?:\s*¶\s*(\d+))?")
+_AY = re.compile(r"\b[A-Z][A-Za-z'’\-]+(?:\s+(?:and|&)\s+[A-Z][A-Za-z'’\-]+)?(?:\s+et\s+al\.?)?"
+                 r"[\s,]*\(?\s*(?:19|20)\d{2}[a-z]?")
+
+
+def _norm(s):
+    return " ".join(re.findall(r"[a-z0-9]+", s.lower()))
+
+
+def slice_paragraph(chapter, key, quote):
+    """The slice paragraph of `key` in `chapter` that holds `quote` (or None)."""
+    p = os.path.join(REF, "slices", chapter, key + ".txt")
+    if not os.path.isfile(p):
+        return None
+    with open(p, encoding="utf-8", errors="replace") as fh:
+        paras = paragraph_texts(fh.read(), min_chars=40)
+    want = _norm(quote)[:80]
+    for para in paras:
+        if want and want in _norm(para):
+            return para
+    return None
+
+
+def describe(para):
+    n_w = len(para.split())
+    n_c = len({m.group(0).lower() for m in _AY.finditer(para)})
+    return "%d words · %d sentences · %d author-year citations" % (n_w, len(split_sentences(para)), n_c)
+
+
+def resolve_part(part):
+    path = os.path.join(REF, "sections", part)
+    if not os.path.exists(path):              # "03-evidence" or "03-evidence.md" without its chapter
+        name = os.path.basename(part)
+        hits = glob.glob(os.path.join(REF, "sections", "*", name))
+        hits += glob.glob(os.path.join(REF, "sections", "*", name + ".md"))
+        if len(hits) == 1:
+            path = hits[0]
+            part = os.path.relpath(path, os.path.join(REF, "sections")).replace(os.sep, "/")
+    return path, part
+
+
+def cmd_version_card(part, n, full=False):
+    """One Version's Pattern, Use it when, Not this when and two examples -- what
+    the fast lane reads instead of the whole part file. --full adds the whole
+    corpus paragraph behind each example and the chapter's short-paragraph bank
+    entries for the Version."""
+    path, part = resolve_part(part)
+    if not os.path.exists(path):
+        print("NO SUCH PART FILE:", part)
+        sys.exit(1)
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    m = re.search(r"(?m)^### Version %s\b.*$" % re.escape(n), text)
+    if not m:
+        print("NO Version %s in %s -- it has: %s" % (n, part, ", ".join(re.findall(r"(?m)^### Version (\d+)", text))))
+        sys.exit(1)
+    end = re.search(r"(?m)^(?:### |## |---\s*$)", text[m.end():])
+    block = text[m.end():m.end() + end.start()] if end else text[m.end():]
+    fields, cur = {}, None
+    for l in block.split("\n"):
+        f = FIELD.match(l)
+        if f:
+            cur = f.group(1)
+            fields.setdefault(cur, []).append(f.group(2).strip())
+        elif cur and l.startswith("  ") and l.strip():
+            if cur == "Example":
+                fields[cur].append(l.strip())
+            else:
+                fields[cur][-1] += " " + l.strip()
+        elif not l.strip():
+            cur = None
+    print(m.group(0).strip() + "   (" + part + ")")
+    for name in ("Pattern", "Use it when", "Not this when"):
+        for v in fields.get(name, []):
+            print("%-14s %s" % (name, v))
+    examples = fields.get("Example", [])
+    for v in examples[:2]:
+        print("%-14s %s" % ("Example", v))
+    if not full:
+        return
+    chapter = part.split("/")[0] if "/" in part else ""
+    print("\nFULL PARAGRAPHS behind the examples (chapter slices: %s)" % (chapter or "?"))
+    shown = 0
+    for v in examples:
+        e = EXAMPLE.search(v)
+        if not e:
+            continue
+        para = slice_paragraph(chapter, e.group(2), e.group(1)) if chapter else None
+        if para:
+            shown += 1
+            print("\n-- %s%s · %s" % (e.group(2), (" ¶" + e.group(3)) if e.group(3) else "", describe(para)))
+            print(para)
+    if not shown:
+        print("  (no example could be found in the slices)")
+    bank = os.path.join(REF, "sections", chapter, "short-exemplars.md") if chapter else ""
+    if bank and os.path.isfile(bank):
+        with open(bank, encoding="utf-8", errors="replace") as fh:
+            btxt = fh.read()
+        # Version numbers restart in every part file, so a split chapter's
+        # bank heading names its part -- '## Version 6 (03-evidence)' -- and
+        # matching the number alone printed 02-mechanism's Version 6 for
+        # 03-evidence's (a finance build, 2026-10-27). Number alone only when the bank
+        # names no parts (a single-file chapter).
+        stem = os.path.splitext(os.path.basename(path))[0]
+        b = re.search(r"(?m)^## Version %s \(%s\)\s*$" % (re.escape(n), re.escape(stem)), btxt)
+        if not b and not re.search(r"(?m)^## Version \d+ \(", btxt):
+            b = re.search(r"(?m)^## Version %s\b.*$" % re.escape(n), btxt)
+        if b:
+            bend = re.search(r"(?m)^## ", btxt[b.end():])
+            print("\nSHORT-PARAGRAPH BANK (%s):" % os.path.relpath(bank, SKILL).replace(os.sep, "/"))
+            print(btxt[b.end():b.end() + bend.start()].strip() if bend else btxt[b.end():].strip())
+        else:
+            print("\nshort-paragraph bank: no entry for Version %s" % n)
+
+
+def cmd_router(chapter):
+    """The chapter's Version router (its skeleton's table rows), nothing else."""
+    path = os.path.join(REF, "sections", chapter, "00-skeleton.md")
+    if not os.path.exists(path):
+        print("NO SKELETON for chapter %s" % chapter)
+        sys.exit(1)
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    m = re.search(r"(?m)^## \d+\. The Version router.*$", text) or re.search(r"(?m)^## .*[Rr]outer.*$", text)
+    if not m:
+        print("no router section in %s" % path)
+        sys.exit(1)
+    end = re.search(r"(?m)^(?:## |---\s*$)", text[m.end():])
+    block = text[m.end():m.end() + end.start()] if end else text[m.end():]
+    print(m.group(0).strip())
+    for l in block.split("\n"):
+        if l.startswith("|") and not re.match(r"^\|[\s|:-]+\|$", l):
+            print(l)
 
 
 def cmd_numbers(draft, table):
@@ -215,19 +403,35 @@ def cmd_section(path, chapter):
 
 
 def main():
-    if len(sys.argv) < 3:
+    a = sys.argv[1:]
+    if len(a) < 2:
         sys.exit(__doc__)
-    cmd = sys.argv[1]
+    cmd = a[0]
     if cmd == "para":
-        cmd_para(sys.argv[2])
+        chapter = a[a.index("--chapter") + 1] if "--chapter" in a else None
+        cmd_para(a[1], chapter)
     elif cmd == "own":
-        cmd_own(sys.argv[2:])
+        cmd_own(a[1:])
     elif cmd == "version":
-        cmd_version(sys.argv[2], sys.argv[3])
+        cmd_version(a[1], a[2])
+    elif cmd == "version-card":
+        cmd_version_card(a[1], a[2], "--full" in a)
+    elif cmd == "router":
+        cmd_router(a[1])
     elif cmd == "numbers":
-        cmd_numbers(sys.argv[2], sys.argv[3])
+        cmd_numbers(a[1], a[2])
     elif cmd == "section":
-        cmd_section(sys.argv[2], sys.argv[3])
+        cmd_section(a[1], a[2])
+    elif cmd == "src":
+        if a[1] == "--line":
+            sys.exit(_src.cmd_line(a[2], a[3]))
+        if a[1] == "--find":
+            pairs = a[2:]
+            if not pairs or len(pairs) % 2:
+                sys.exit("src --find takes KEY \"<phrase>\" pairs\n" + __doc__)
+            # every pair is looked up; the exit code says whether all were found
+            sys.exit(max(_src.cmd_find(k, w) for k, w in zip(pairs[::2], pairs[1::2])))
+        sys.exit(_src.cmd_src(read_arg(a[1]), split_sentences))
     else:
         sys.exit("unknown command: " + cmd + "\n" + __doc__)
 

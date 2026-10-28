@@ -22,7 +22,11 @@ import _jobs  # noqa: E402
 
 _STYLE = _jobs.citation_style()
 
-_DISCOURSE = r"et al\.|following|consistent with|as in|building on"
+# Discourse markers of a third party's claim, matched in ANY case (1.6.0): the
+# case-sensitive 1.5.0 form missed a sentence-initial "Consistent with" or
+# "Following", and as whole words ("the following table" is no marker
+# boundary problem: \b keeps "followings" out, judgment handles the rest).
+_DISCOURSE = r"(?i:\bet al\.|\bfollowing\b|\bconsistent with\b|\bas in\b|\bbuilding on\b)"
 # (Smith, 2019) (Smith and Jones 2019a) (Smith et al., 2019; Lee, 2020) and
 # narrative Smith (2019) / Smith et al. (2019)
 AUTHOR_YEAR = (r"\([^()]{0,120}?(?:1[89]|20)\d{2}[a-z]?\)"

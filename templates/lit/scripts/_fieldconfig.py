@@ -46,6 +46,14 @@ def excluded():
     return set(cp.as_list(_DATA.get("excluded")))
 
 
+def reviews():
+    """Review and survey articles (1.6.0): searched for terminology, kept out of
+    the style sample -- a review essay's paragraphs are not the field's
+    research-paper paragraphs (the parent's literature chapter took 30% of
+    its paragraphs from one)."""
+    return set(cp.as_list(_DATA.get("reviews")))
+
+
 def jobs():
     """The field's chapter taxonomy. Empty until Tier 2's approved induction
     writes it -- callers must treat [] as 'coarse mode', never as an error."""

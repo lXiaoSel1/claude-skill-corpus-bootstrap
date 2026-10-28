@@ -50,7 +50,10 @@ print("%s-draft drift check (built tiers: %s)\n"
 print("skeleton")
 for s in ("draftcheck.py", "state.py", "build_evidence_map.py",
           "measure_structure.py", "measure_verbs.py", "_fieldstyle.py",
-          "check_canon_quotes.py"):
+          "check_canon_quotes.py",
+          # 1.6.0: the fast lane (evidence cards, one-call paragraph check)
+          "_src.py", "_tiers.py", "_ngram.py", "cards.py", "para_check.py",
+          "short_paras.py"):
     check("scripts/%s exists" % s, os.path.exists(os.path.join(HERE, s)))
 for p in ("_jobs.py", "_cfgparse.py", "a1_headings.py", "a2_build.py",
           "build_map.py", "build_names.py", "build_windows.py",
@@ -163,8 +166,9 @@ if 3 in TIERS:
         if os.path.isdir(records) else 0
     check("records/ non-empty", nrec > 0, "%d files" % nrec)
     # an empty or unfilled registry must not pass by skipping every check below
-    check("registry sections.chapters recorded", bool(REG["sections"].get("chapters")),
-          "no chapter recorded: Tier 3 has nothing to check")
+    chs = REG["sections"].get("chapters") or {}
+    check("registry sections.chapters recorded", bool(chs),
+          "%d chapters" % len(chs) if chs else "no chapter recorded: Tier 3 has nothing to check")
     total_v = 0
     total_f = 0
     bad_fields, thin = [], []

@@ -3,8 +3,9 @@
 notes of the given keys that match a regex, with the page the note gives for
 each quote: `p.N: "quote"` (page before the quote) or `"quote" (p.N)` (page
 right after it). A quote with neither prints no page. Needs reading notes
-(onboarding --notes, or polish.yaml notes_dir); one note per key, named
-<KEY>.md, anywhere under that folder.
+(onboarding --notes, or polish.yaml notes_dir); one note per key, the one
+onboarding matched, else <KEY>.md anywhere under that folder, else the note
+whose front matter says bib_key: KEY.
 
 RUN
     py -3 scripts/note_terms.py KEY1,KEY2 "regex"

@@ -48,3 +48,5 @@ for m in hits:
     pg = ctx.page_label(key, m.start())
     print((pg + " " if pg else "") + "...", t[max(0, m.start() - w):m.end() + w], "...\n")
 print("%s: %d match(es) in %s%s" % (key, len(hits), src, note))
+for n in ctx.pdf_notes(key):
+    print("  note: " + n)

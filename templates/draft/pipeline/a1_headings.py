@@ -289,9 +289,15 @@ def numbered_ok(title):
     # save it either: Greek in the title ('βi') yields the bare lowercase token
     # 'i' from the [A-Za-z] word scan, dragging title-case to 0.75 < 0.8.
     # An explicit appendix exemption is the honest fix; the ratio is not.
+    # 'Prior' opens footnotes ('Prior to 2006, ...') and real chapters too --
+    # '2. Prior literature and hypothesis development' (GarmanKubick2025 L58,
+    # a finance build, 2026-10-27). A short line with a field headword and no auxiliary
+    # verb is kept: A2 reads what follows and rejects a false one.
     if (STOPINIT.match(title) and not titleish(title)
             and not APPENDIX.match(title)
-            and not re.match(r'(?i)^(a|an|the)\s+\S', title)):
+            and not re.match(r'(?i)^(a|an|the)\s+\S', title)
+            and not (len(title) <= 70 and HEADWORDS is not None and HEADWORDS.search(title)
+                     and not _FINITE.search(title))):
         return False, 'numbered footnote (stopword-initial, not title-case)'
     return True, ''
 

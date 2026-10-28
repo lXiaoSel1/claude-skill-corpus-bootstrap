@@ -1,8 +1,8 @@
 ---
 name: {{FIELD}}-draft
-description: "Draft ONE English paragraph at a time for a {{FIELD}} manuscript on {{FIELD_KEYWORDS}}, its structure and evidence grounded in a measured corpus of {{FIELD}} papers (attested paragraph Versions, claim ledger before prose). Also reverse-outlines a finished section and traces abstract/intro claims inward to their supporting evidence. Use when user says \"帮我写这一段{{FIELD}}\", \"起草{{FIELD}}引言\", \"draft the {{FIELD}} intro paragraph\", \"这一段该怎么组织\", \"reverse outline this {{FIELD}} section\". Drafts structure and evidence, NOT style — run /{{FIELD}}-lit on the output. NOT a manuscript reviewer and NOT a fact-checker."
+description: "Draft ONE English paragraph at a time for a {{FIELD}} manuscript on {{FIELD_KEYWORDS}}, its structure and evidence grounded in a measured corpus of {{FIELD}} papers (attested paragraph Versions, claim ledger before prose). Also reverse-outlines a finished section and traces abstract/intro claims inward to their supporting evidence. Use when user says \"帮我写这一段{{FIELD}}\", \"起草{{FIELD}}引言\", \"draft the {{FIELD}} intro paragraph\", \"这一段{{FIELD}}该怎么组织\", \"reverse outline this {{FIELD}} section\". Drafts structure and evidence, NOT style — run /{{FIELD}}-lit on the output. NOT a manuscript reviewer and NOT a fact-checker."
 author: Xuan Tang
-version: 2.0.0
+version: 2.1.0
 argument-hint: "[section ¶n | --outline <sec> | --trace <sec|abstract>]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
@@ -43,15 +43,68 @@ skill never touches `main.tex` — you place the paragraph yourself. `Bash` was 
 two purposes, and the guarantee moved from a tool gate to a behavioural contract:
 
 1. **Read-only checks** — `py -3 scripts/draftcheck.py` (sentence counts, traceable marks and cite
-   keys for the ledger, ownership regex, verb legality, Version existence, numbers-vs-table) and `py -3 scripts/build_evidence_map.py
-   --check`. These write nothing.
-2. **One whitelisted write path** — `py -3 scripts/state.py`, which appends to
-   `references/manuscript-state.md` and to no other file (backup + disk read-back inside the script).
+   keys for the ledger, ownership regex, verb legality, Version existence, numbers-vs-table, and `src`:
+   numbers and copied stretches against the cited papers), `py -3 scripts/para_check.py`,
+   `py -3 scripts/short_paras.py` and `py -3 scripts/build_evidence_map.py --check`. These write nothing.
+   A paragraph may be passed as a file, as text (`draftcheck.py para "<paragraph>"`) or on stdin (`-`).
+2. **Two whitelisted write paths** — `py -3 scripts/state.py`, which appends to
+   `references/manuscript-state.md`, and `py -3 scripts/cards.py`, which writes the evidence cards in
+   `references/cards/` (fast lane). Each backs up and reads back what it wrote.
 
 **Anything else Bash could write is off-contract.** No `>`, no `tee`, no heredoc, no edits to any file
-outside `references/manuscript-state.md`. `scripts/check_drift.py` is the maintainer-side monitor of
+outside those two places. `scripts/check_drift.py` is the maintainer-side monitor of
 this contract; a run that wrote anywhere else is a broken run, report it. For searches, **use the
 `Grep` tool, not shell `grep`.**
+
+## Fast lane — for a paragraph that reports cited papers (the default for one)
+
+> Ported from the parent at factory 1.6.0. It needs Tier 3 (Versions exist) and, for `src` against
+> PDFs, manuscript onboarding (the library index). Before Tier 3 the fast lane can build cards and
+> check a pasted paragraph, but cannot draft (rule 2).
+
+Checking the same papers again at every paragraph and every stage is what made a parent paragraph cost
+70 minutes. The fast lane checks each paper **once**, into an evidence card, and checks the paragraph in
+**one** script call. Every check of the full workflow still runs; only the repetition goes. Use the
+full workflow below for paragraphs whose evidence is the author's own tables, for `--outline` and
+`--trace`.
+
+| # | Step | Calls |
+|---|---|---|
+| F1 | **CARDS** — `py -3 scripts/cards.py show KEY …` for the paragraph's keys; `build` the missing ones first. A card holds the paper's own result lines (R), design lines (D) and the note's quotations checked against the paper (Q, FOUND / NOT IN PAPER), each with corpus:LINE and PDF page | 1–2 |
+| F2 | **STRUCTURE** — `draftcheck.py router <chapter>` (skip when the Version is known) and `draftcheck.py version-card <part> <n>` (`--full` for the whole corpus paragraphs behind its examples and the chapter's short-paragraph bank); `state.py list <chapter>` for the Versions this manuscript already used | 1–2 |
+| F3 | **FILL GAPS** — a fact the cards lack: `draftcheck.py src --find KEY "<words>"`, then `cards.py add KEY "<the paper's sentence>"` (verbatim-checked). Never from memory, never from the note alone | 0–2 |
+| F4 | **DRAFT + MAP** — the paragraph, then `=== map`, one line per sentence: `<first words> \| KEY#R2 KEY#D1` (`\| -` for a sentence of your own) | 0 |
+| F5 | **CHECK** — `py -3 scripts/para_check.py "<paragraph + map>" --chapter <chapter> [--cap N] [--band LO-HI] [--cites N]`: MAP, NUMBERS, COPIED, LENGTH and SHAPE must pass; STRENGTH, WORDING, FRAMES are REVIEW items. Fix, run once more | 1–2 |
+| F6 | **RECORD** — `cards.py mark KEY:R2 KEY2:R1 …` and `state.py use …` (several cached source lines at once: `state.py cache --from -`) | 1–2 |
+
+**Budget: ≤10 calls, no subagent.** Rules 1–5 below hold; F1–F5 are how rules 3 and 4 are met here: a
+sentence rests on card lines (the paper's own words, already verbatim-checked) instead of a hand-built
+ledger, and `para_check.py` runs the ownership, number, copy and length checks of steps 3a and 4 in one
+pass.
+
+- **Paragraph shape.** `para_check.py` prints where the paragraph's rendered words and distinct cited
+  keys sit in the chapter's corpus paragraphs (`structure-norms.json` layer F, style-safe papers only).
+  When the author has set a target (e.g. 100–170 words, at most 6 cited works), pass it as
+  `--band 100-170 --cites 6`: it becomes must-pass. The chapter's `00-skeleton.md` records the target
+  beside the corpus distribution; never present the author's target as the corpus norm.
+- **Choosing the Version under a length cap.** When the paragraph must carry many studies in few words
+  (under about 20 words a study), the corpus groups them: one sentence states the shared finding or
+  channel and a citation block carries the studies, and at most one or two studies are written out with
+  their data. Check this field's own share of citations in blocks before relying on it (para_check's
+  CITATIONS line; the parent measured 60–66% in blocks on its dense paragraphs).
+- **Whole short paragraphs to imitate.** `py -3 scripts/short_paras.py <chapter> [--words 60-170]
+  [--cites 2-6]` lists the chapter's style-safe corpus paragraphs in that band; a tagging pass files them
+  under their Versions in `references/sections/<chapter>/short-exemplars.md` (`short_paras.py <chapter>
+  --check` confirms every one is verbatim), and `version-card --full` prints them.
+- **REVIEW items are decided, not ignored.** STRENGTH: keep the word only if a card line says it that
+  strongly (`HEDGE LOST?` on a paper that only says "tend to" means the hedge comes back). WORDING: the
+  paper's own term replaces the field's (`src --find` shows the paper's wording). FRAMES: a span in 0
+  corpus papers is rewritten in attested words or kept with a reason; one `attest.py` batch checks the
+  replacements (`../{{FIELD}}-lit/scripts/attest.py --scope style "…" "…"`).
+- **Output slots:** `PARAGRAPH` · `MAP` · `CHECK` (para_check's summary lines) · `REVIEW` (each item:
+  kept or fixed, and why) · `LEAVE TO AUTHOR` · `STATE`. Then stop and wait, as rule 1 says.
+- `/{{FIELD}}-lit` is not needed after a fast-lane paragraph (para_check runs its copy, wording and frame
+  checks); run it only when the author asks.
 
 ## Rules
 
@@ -71,8 +124,8 @@ this contract; a run that wrote anywhere else is a broken run, report it. For se
    field's, marked PARENT): attribute with `note that`, or `find that` when the pasted line itself
    states the finding, and take structural rules from `references/structure-canon.skeleton.md` as
    unmeasured guidance, never as this field's measured norms.
-5. **Draft only, write only through `state.py`.** The manuscript is never written; the sole write
-   path is the behavioural contract above. Register is not this skill's call — hand off to
+5. **Draft only, write only through `state.py` and `cards.py`.** The manuscript is never written; the
+   two write paths are the behavioural contract above. Register is not this skill's call — hand off to
    `/{{FIELD}}-lit`.
 
 ## Workflow
@@ -286,6 +339,9 @@ warrant survives, flagged, into `LEAVE TO AUTHOR`.
    a reading note from the onboarding `--notes` folder, located via `references/notes-index.md`
    (onboarding writes it when notes are given); or, failing that,
    `../{{FIELD}}-lit/references/corpus/<key>.txt` directly. Cannot paste it → drop the sentence.
+   A line taken from a note is a pointer: confirm it in the corpus file (Grep for a distinctive
+   phrase or number) before it counts. A note can be wrong; one said a table was absent from a
+   PDF that held it.
    **Without reading notes** `references/notes-index.md` does not exist, so every source line comes
    from the corpus file, and there is no §B no-note list to consult. That is a normal state, not a
    defect; the guard is unweakened, because the corpus file is the stronger source of the two.
@@ -489,8 +545,11 @@ ordering / budget / first-split the corpus supports for that part.
 
 | Script | What it does |
 |---|---|
-| `scripts/draftcheck.py` | **Steps 3a/4.** `para` (sentence counts, traceable marks, cite keys, verb flags) · `own` (ownership regex per pasted line) · `version` (does the named Version exist) · `numbers` (draft numerals vs the referenced table). Read-only |
-| `scripts/state.py` | **Steps 0/5.** `use`/`reject`/`cache`/`list` on `manuscript-state.md` — the one whitelisted write path |
+| `scripts/draftcheck.py` | **Steps 3a/4.** `para` (sentence counts, length vs the chapter's P90 with `--chapter`, traceable marks, cite keys, verb flags) · `own` (ownership regex per pasted line) · `version` (does the named Version exist) · `version-card` / `router` (fast lane; `--full` adds whole paragraphs) · `numbers` (draft numerals vs the referenced table) · `src` (numbers and 7+-word copies vs the cited papers; `--line`, `--find`). Read-only |
+| `scripts/para_check.py` | **Fast lane F5.** Every mechanical check of one paragraph + its map in one call: MAP, NUMBERS, COPIED, LENGTH (`--cap`, `--band`), SHAPE (`--cites`, layer-F percentiles), STRENGTH, WORDING, FRAMES, CITATIONS. Read-only |
+| `scripts/cards.py` | **Fast lane F1/F3/F6.** `build`/`show`/`add`/`mark` evidence cards in `references/cards/` — the second whitelisted write path |
+| `scripts/short_paras.py` | A chapter's short corpus paragraphs in a word/citation band (the short-paragraph bank's candidates); `--check` verifies the bank verbatim. Read-only |
+| `scripts/state.py` | **Steps 0/5.** `use`/`reject`/`cache` (`--from` for many rows)/`list` on `manuscript-state.md` — the first whitelisted write path |
 | `scripts/build_evidence_map.py` | `--check` every session at step 2a; full run when main.tex moved |
 | `scripts/measure_structure.py` | Only when a structural rule is added or questioned — regenerates `structure-norms.json` |
 | `scripts/measure_verbs.py` | Tier 4 — regenerates `verb-ladder.md`'s counts from this corpus |
@@ -544,6 +603,6 @@ stream.
   such as `/audit-reproducibility` (optional).
 
 **It drafts, so its output can be pasted unread.** The brake is the write contract at the top of this
-file: `Write`/`Edit` absent, `Bash` confined to the read-only checkers and the single `state.py`
-write path, `check_drift.py` watching the layer. The `/{{FIELD}}-lit` hand-off is a norm, not a gate.
+file: `Write`/`Edit` absent, `Bash` confined to the read-only checkers and the `state.py` and
+`cards.py` write paths, `check_drift.py` watching the layer. The `/{{FIELD}}-lit` hand-off is a norm, not a gate.
 Read what it gives you.

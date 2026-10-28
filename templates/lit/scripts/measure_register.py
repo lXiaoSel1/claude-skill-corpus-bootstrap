@@ -23,9 +23,19 @@ THE NOUN/VERB COLLISION
     "(in)?consistent with", where a pattern swallowed the negation and the
     statistic measured its own opposite.
 
+ONE CHAPTER (1.6.0)
+    --section <job> measures the register of ONE chapter from the draft
+    instance's slices (after Tier 2), style-safe papers only: sentence length,
+    citations per sentence, narrative vs parenthetical citations, the verb
+    after a narrative citation ("Smith (2019) finds"), sentence-initial
+    contrast and addition connectors, "consistent with", and hedges. These are
+    the chapter's own numbers for a review of one of its paragraphs -- the
+    whole-corpus counts above mix every chapter.
+
 RUN
     py -3 scripts/measure_register.py
     py -3 scripts/measure_register.py --scope term
+    py -3 scripts/measure_register.py --section <job>
 """
 import argparse
 import os
@@ -171,10 +181,102 @@ def table(title, rows, texts, total_words, note_col=False, target=False):
     print()
 
 
+# ---- one chapter (1.6.0) ---------------------------------------------------
+_NAME = r"[A-Z][A-Za-z'’\-]+(?:\s+(?:and|&)\s+[A-Z][A-Za-z'’\-]+|\s+et\s+al\.?)?"
+NARRATIVE = re.compile(r"\b" + _NAME + r"(?:'s|’s)?\s*\(\s*(?:19|20)\d{2}[a-z]?(?:\s*,\s*(?:19|20)\d{2}[a-z]?)*\s*\)")
+NARR_VERB = re.compile(r"\b" + _NAME + r"\s*\(\s*(?:19|20)\d{2}[a-z]?\s*\)\s+(?:also\s+|further\s+|similarly\s+)?([a-z]+)")
+PAREN = re.compile(r"\((?:e\.g\.,?\s*|see\s+)?[^()]*?[A-Z][A-Za-z'’\-]+[^()]*?,?\s*(?:19|20)\d{2}[a-z]?[^()]*\)")
+BRACKET = re.compile(r"\[\d{1,3}(?:\s*[,–\-]\s*\d{1,3})*\]")
+CONNECTORS = ["However,", "In contrast,", "By contrast,", "On the other hand,", "Similarly,",
+              "Likewise,", "Moreover,", "Furthermore,", "In addition,", "Additionally,",
+              "Consistent with", "Building on", "Following", "Although", "While", "Yet,",
+              "Nevertheless,", "More recently,", "Recently,", "Prior", "Previous", "Another strand",
+              "A related", "Several", "Early", "Earlier"]
+HEDGES = [("may", r"\bmay\b"), ("might", r"\bmight\b"), ("could", r"\bcould\b"),
+          ("suggest(s/ed)", r"\bsuggest(?:s|ed)?\b"), ("appear(s) to", r"\bappears? to\b"),
+          ("likely", r"\blikely\b"), ("tend(s) to", r"\btends? to\b"), ("potentially", r"\bpotentially\b")]
+
+
+def _q(xs, p):
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, int(p * (len(xs) - 1) + 0.5))] if xs else 0
+
+
+def section_report(job):
+    import _fieldconfig
+    root = _fieldconfig.draft_slices_dir()
+    d = os.path.join(root, job) if root else ""
+    if not d or not os.path.isdir(d):
+        sys.exit("no slices for %r (Tier 2 builds them in the draft instance's references/slices/)" % job)
+    safe = set(load_scope("style"))
+    from textseg import paragraph_texts
+    paras = []
+    for f in sorted(os.listdir(d)):
+        key = f[:-4]
+        if not f.endswith(".txt") or f.startswith("_") or (safe and key not in safe):
+            continue
+        with open(os.path.join(d, f), encoding="utf-8", errors="replace") as fh:
+            text = "\n".join(l for l in fh.read().split("\n") if not l.startswith("====="))
+        paras += [(key, p) for p in paragraph_texts(text)]
+    if not paras:
+        sys.exit("no style-safe paragraphs in slices/%s" % job)
+    papers = sorted({k for k, _ in paras})
+    sents = [(k, s) for k, p in paras for s in split_sentences(p)]
+    words = sum(len(s.split()) for _, s in sents)
+    slen = [len(s.split()) for _, s in sents]
+    print("section=%s  papers=%d  paragraphs=%d  sentences=%d  words=%s  (style-safe only)\n"
+          % (job, len(papers), len(paras), len(sents), format(words, ","), ))
+
+    print("S1. Sentence length: P25 %d · P50 %d · P75 %d · P90 %d words"
+          % (_q(slen, .25), _q(slen, .5), _q(slen, .75), _q(slen, .9)))
+    narr = sum(len(NARRATIVE.findall(s)) for _, s in sents)
+    paren = sum(len(PAREN.findall(s)) for _, s in sents)
+    brk = sum(len(BRACKET.findall(s)) for _, s in sents)
+    cited = sum(1 for _, s in sents if NARRATIVE.search(s) or PAREN.search(s) or BRACKET.search(s))
+    print("S2. Citations: narrative %d · parenthetical %d · bracket %d  -> narrative share %.0f%%;"
+          " sentences with a citation %.0f%%; per 10k words %.1f"
+          % (narr, paren, brk, 100.0 * narr / max(1, narr + paren), 100.0 * cited / len(sents),
+             (narr + paren + brk) / float(words) * 10000))
+
+    verbs, vpapers = {}, {}
+    for k, s in sents:
+        for v in NARR_VERB.findall(s):
+            verbs[v] = verbs.get(v, 0) + 1
+            vpapers.setdefault(v, set()).add(k)
+    top = sorted(verbs.items(), key=lambda kv: (-kv[1], kv[0]))[:18]
+    print("\nS3. The word after a narrative citation (\"Smith (2019) ___\") -- top %d of %d forms"
+          % (len(top), len(verbs)))
+    for v, n in top:
+        print("  %-14s %4d uses  %3d papers" % (v, n, len(vpapers[v])))
+
+    print("\nS4. Sentence-initial connectors (share of the chapter's sentences)")
+    for c in CONNECTORS:
+        hits = [k for k, s in sents if s.startswith(c)]
+        if hits:
+            print("  %-22s %4d sentences (%.1f%%)  %3d papers"
+                  % (c, len(hits), 100.0 * len(hits) / len(sents), len(set(hits))))
+    cw = [k for k, s in sents if re.search(r"\bconsistent with\b", s, re.I)]
+    print("  %-22s %4d sentences (%.1f%%)  %3d papers   (anywhere in the sentence)"
+          % ("consistent with", len(cw), 100.0 * len(cw) / len(sents), len(set(cw))))
+
+    print("\nS5. Hedges (per 10k words of the chapter)")
+    for label, pat in HEDGES:
+        rx = re.compile(pat, re.I)
+        n = sum(len(rx.findall(s)) for _, s in sents)
+        ps = len({k for k, s in sents if rx.search(s)})
+        print("  %-16s %4d  /10k=%5.1f  %3d papers" % (label, n, n / float(words) * 10000, ps))
+    print("\nRead these as the chapter's norms for ONE paragraph's review: a draft far from them is a"
+          " question for judgment, never a rule.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scope", choices=["style", "term"], default="style")
+    ap.add_argument("--section")
     args = ap.parse_args()
+    if args.section:
+        section_report(args.section)
+        return
 
     ids = load_scope(args.scope)
     texts = {}

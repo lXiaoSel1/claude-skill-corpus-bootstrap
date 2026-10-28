@@ -3,7 +3,8 @@
 
 INSTANCE VERSION.  The parent's records mixed two formats (a Chinese-note
 round and a tagged table round); an instance built under PASS1_SPEC has ONE:
-a plain `N sentences` line per paragraph.  This script scans every
+an `N sentences` line per paragraph, which a reader may follow with a note
+(`9 sentences  [cut by a page break ...]`).  This script scans every
 references/records/*.md, aggregates per-paper sentence-count sequences, and
 prints the distribution + the uniformity-gate calibration (identical
 consecutive pairs and triples, windows never spanning a paper boundary).
@@ -27,7 +28,9 @@ if hasattr(sys.stdout, "reconfigure"):
 BASE = os.path.dirname(os.path.abspath(__file__))
 REC = os.path.normpath(os.path.join(BASE, "..", "references", "records"))
 
-PAT = re.compile(r"^\s*(\d+)\s+sentences?\s*$", re.I)
+# a note may follow the count; a finance build lost 541 of 8,190 paragraphs
+# to a pattern that required the count to end the line
+PAT = re.compile(r"^\s*(\d+)\s+sentences?\b", re.I)
 
 
 def counts(path):

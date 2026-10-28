@@ -15,6 +15,10 @@ edit both field-configs' lists and re-run with --keep-config):
   * SHORT (< 1,500 words): a report or a key with no .bib type -> terminology_only;
     a research article -> excluded (abstract-only or a landing page)
   * not English by its first pages (the onboarding index) -> excluded
+  * (1.6.0) a review / survey article (the map's role `review`) -> reviews
+    (terms yes, style sample no); entries already listed under `reviews:` are
+    kept; papers whose opening lines call themselves a review or survey are
+    LISTED as candidates, never moved on a guess
 Then: both field-configs written (and read back), the manifest rebuilt, the
 lit registry's corpus denominators filled, Tier 0 added to both registries,
 and the lit check_drift run.
@@ -89,13 +93,19 @@ def main():
             for k, r in json.load(fh).get("keys", {}).items():
                 lang[r.get("corpus_key", k)] = r.get("lang", "")
 
+    cfg = fld.config()
+    cp = fld.cfgparse()
+    revs = [(k, "kept from field-config") for k in cp.as_list(cfg.get("reviews"))]
     if a.keep_config:
-        cfg = fld.config()
-        cp = fld.cfgparse()
         term = [(k, "kept from field-config") for k in cp.as_list(cfg.get("terminology_only"))]
         excl = [(k, "kept from field-config") for k in cp.as_list(cfg.get("excluded"))]
     else:
         term, excl = [], []
+        have = {k for k, _ in revs}
+        for k in sorted(src):
+            role = (src[k].get("role") or rows.get(k, {}).get("role") or "").strip()
+            if role == "review" and k not in have:
+                revs.append((k, "review / survey article (corpus map role)"))
         for k in sorted(src):
             r = src[k]
             flags = r.get("flags", [])
@@ -126,12 +136,21 @@ def main():
         hdr = "tier0_accept.py %s defaults; edit both configs and re-run with --keep-config to change" % F.TODAY
         fld.set_list("terminology_only", term, hdr)
         fld.set_list("excluded", excl, hdr)
+        fld.set_list("reviews", revs, hdr if revs else "")
 
-    print("\nTier 0 decisions (%d terminology_only, %d excluded):" % (len(term), len(excl)))
+    print("\nTier 0 decisions (%d terminology_only, %d excluded, %d reviews):"
+          % (len(term), len(excl), len(revs)))
     for k, why in excl:
         print("  excluded          %-28s %s" % (k, why))
     for k, why in term:
         print("  terminology_only  %-28s %s" % (k, why))
+    for k, why in revs:
+        print("  reviews           %-28s %s" % (k, why))
+    decided = {k for k, _ in excl + term + revs}
+    cand = [k for k in sorted(src) if k not in decided and looks_like_review(fld, k)]
+    if cand:
+        print("  possible review / survey articles (NOT moved -- add them under reviews: in both"
+              " field-configs and re-run with --keep-config if they are): %s" % ", ".join(cand))
     rep = sorted(k for k, r in src.items() if "REPLACEMENT" in r.get("flags", []))
     if rep:
         print("  (encoding damage, judged by the manifest's extraction check: %s)" % ", ".join(rep))
@@ -166,6 +185,25 @@ def main():
         sys.exit(1)
     print("\nNEXT: %s %s %s%s" % (F.PY, os.path.join(F.HERE, "calibrate_paragraphs.py"), fld.field,
                                   F.dest_arg(a.dest)))
+
+
+REVIEW_HINT = None
+
+
+def looks_like_review(fld, key):
+    """The paper's opening lines (title, abstract) call it a review or survey."""
+    import re
+    global REVIEW_HINT
+    if REVIEW_HINT is None:
+        REVIEW_HINT = re.compile(r"\b(?:a review|literature review|review of the literature|a survey|"
+                                 r"this (?:review|survey)|we review|we survey|review article|annual review)\b",
+                                 re.I)
+    p = os.path.join(fld.lit, "references", "corpus", key + ".txt")
+    if not os.path.isfile(p):
+        return False
+    with open(p, encoding="utf-8", errors="replace") as fh:
+        head = fh.read(2500)
+    return bool(REVIEW_HINT.search(head))
 
 
 def index_paths(fld):

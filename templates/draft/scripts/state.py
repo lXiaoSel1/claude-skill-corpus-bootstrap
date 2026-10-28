@@ -23,6 +23,7 @@ RUN
     py -3 scripts/state.py use     <chapter> <part> <version-no> "<label>" [¶n]
     py -3 scripts/state.py reject  <chapter> <part> <version-no> "<reason>"
     py -3 scripts/state.py cache   <cite-key> <verb> <owner-verdict> "<verbatim line>" "<file:line>"
+    py -3 scripts/state.py cache   --from <file | ->   # many rows in one write: KEY | verb | owner | line | at
     py -3 scripts/state.py list    [chapter]
 """
 import datetime
@@ -102,6 +103,21 @@ def append_row(section_heading, row):
     print("recorded:", row)
 
 
+def append_rows(section_heading, rows):
+    """Several rows in one write (one backup, one read-back) -- the fast lane's
+    `cache --from` (factory 1.6.0, ported from the parent)."""
+    text = load()
+    idx = text.find(section_heading)
+    if idx < 0:
+        sys.exit("state file corrupt: missing " + section_heading)
+    nxt = text.find("\n## ", idx + 1)
+    block_end = nxt if nxt >= 0 else len(text)
+    head, tail = text[:block_end].rstrip("\n"), text[block_end:]
+    body = "\n".join(rows)
+    safe_write(head + "\n" + body + ("\n\n" + tail.lstrip("\n") if tail.strip() else "\n"))
+    print("recorded %d row(s) in %s" % (len(rows), section_heading))
+
+
 def esc(s):
     return s.replace("|", "\\|").replace("\n", " ").strip()
 
@@ -123,6 +139,25 @@ def main():
         append_row("## B. Versions rejected",
                    "| %s | %s | %s | %s | %s |"
                    % (today, esc(ch), esc(part), esc(ver), esc(reason)))
+    elif cmd == "cache" and len(sys.argv) > 3 and sys.argv[2] == "--from":
+        # one row per line: KEY | verb | owner verdict | verbatim line | file:line
+        if sys.argv[3] == "-":
+            src = sys.stdin.read()
+        else:
+            with open(sys.argv[3], encoding="utf-8", errors="replace") as fh:
+                src = fh.read()
+        rows = []
+        for l in src.split("\n"):
+            parts = [p.strip() for p in l.split(" | ")]
+            if len(parts) != 5 or not parts[0]:
+                if l.strip():
+                    sys.exit("not 5 fields separated by ' | ': %r" % l[:80])
+                continue
+            key, verb, owner, line, at = parts
+            rows.append("| %s | %s | %s | %s | %s |" % (esc(key), esc(verb), esc(owner), esc(line)[:200], esc(at)))
+        if not rows:
+            sys.exit("no rows")
+        append_rows("## C. Source-line cache", rows)
     elif cmd == "cache":
         key, verb, owner, line, at = sys.argv[2:7]
         append_row("## C. Source-line cache",

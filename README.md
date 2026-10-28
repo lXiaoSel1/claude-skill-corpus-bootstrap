@@ -436,7 +436,7 @@ The agent starts from `structure-canon.skeleton.md`, the original build's rule f
 py -3 tests/run_selftest.py
 ```
 
-The self-test runs 172 checks in six parts:
+The self-test runs 217 checks in ten parts:
 
 1. Unit tests of the template scripts.
 2. An integration run in a temporary folder. It stamps a throwaway field and builds a fixture corpus with planted defects: curly apostrophes, a phrase wrapped across lines, superscript citations, an image-only scan and a one-paragraph brief. It then runs Tiers 0 and 1, which must catch every defect.
@@ -444,6 +444,10 @@ The self-test runs 172 checks in six parts:
 4. A writing-guide run on the same field. `canon_ingest.py` reads a fixture folder and a `.bib`: a PDF, a saved web page with curly quotes and a script block, a text file with a ligature and a soft hyphen, and a scan. Then `check_canon_quotes.py` runs on quotes that are wrong, reordered, too short, at the wrong line, split by a line-end hyphen, or in the right column of a two-column page. The last check is the draft `check_drift` Tier 4 lines.
 5. The inputs that broke 1.3.0: biblatex citations, field names and keywords that used to break stamping, a folder with brackets, an upper-case `.PDF`, an interrupted ingest, working papers at Tier 0, an empty Tier 3 registry, and writing guides with no PDF converter available.
 6. The 1.4.0 and 1.4.1 changes: parent names and numbers left unlabelled in the templates, unpaired parent markers, every changed polish script (sweep with `--since`, cohesion_loop, opener_check, sent_diff, trial_diff, counts, compile, source_term_check, pdf_ctx, note_terms, rep, scan_appositive), `attest.py` on a phrase found only through other forms of its last word, and the draft and lit scripts no earlier part ran (draftcheck, state, build_evidence_map, build_exemplars, cache).
+7. The 1.5.0 changes: `num_check.py` (a number looked up in the cited papers, across ranges and thousands separators), printed page numbers from the `.bib` and from the pages, `copy_check.py`, a manuscript whose prose sits in the main file with its tables `\input`, a reading note found by the key in its front matter, and the citation commands `draftcheck.py` reads.
+8. The 1.6.0 changes: the fast lane on a fixture field (`draftcheck.py src`, `cards.py`, `para_check.py` with `--band` and `--cites`, `short_paras.py`, `version-card --full`, `state.py cache --from`), the paragraph shape per chapter, `cohesion.py` on short paragraphs, `measure_register.py --section`, review articles kept out of the style norms, and `onboard.py --reuse-corpus`.
+9. The 1.6.1 changes: `seed_from.py` at Tiers 2 and 3 (imports, partial imports and rereads; a later correction file wins; a job the new taxonomy lacks), and `a2_build.py` and `verify_shards.py` on the imported lines.
+10. The 1.6.2 changes: `recount.py` on a count line followed by a note, the chapter count `check_drift.py` prints, and `measure_verbs.py --write`.
 
 It needs PyMuPDF and `pdftotext`, and it writes nothing outside the temporary folder.
 
@@ -472,6 +476,6 @@ docs/images/                screenshots used in this README
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Version 1.4.1 (2026-10-14).
+MIT. See [LICENSE](LICENSE). Version 1.6.3 (2026-10-28).
 
 Written by Xuan Tang, in a project built on Pedro Sant'Anna's [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) template for academic work with Claude Code.

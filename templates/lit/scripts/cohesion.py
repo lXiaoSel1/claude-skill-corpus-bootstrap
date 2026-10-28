@@ -333,6 +333,14 @@ def render(sents, section):
     print("MEASUREMENTS (percentile = position in the corpus distribution;")
     print("both tails are reportable: low = candidate break, high = candidate")
     print("redundancy. These are priorities for the review, never verdicts.)")
+    # 1.6.0: with 3-4 sentences every rate moves in steps of a third or a
+    # quarter, so ONE orphan, one This-opener or one shared stem lands in a tail
+    # (measured on the parent's literature chapter: P85-P99 from a single event).
+    # A tail here is read as advisory: reported, never a reason on its own.
+    short = nbin == "3-4"
+    if short:
+        print("SHORT PARAGRAPH (3-4 sentences): each rate moves in coarse steps -- one event")
+        print("can reach a tail. Tails below are ADVISORY; read the joins, not the percentile.")
     order = [("m6b_singleton_rate", "M6b singleton rate"),
              ("m4_centroid_overlap", "M4 centroid overlap"),
              ("m5_orphan_rate", "M5' orphan rate"),
@@ -351,9 +359,9 @@ def render(sents, section):
             tail = ""
             if pct is not None:
                 if pct <= 10:
-                    tail = "  ⚠ low tail"
+                    tail = "  (low tail, advisory)" if short else "  ⚠ low tail"
                 elif pct >= 90:
-                    tail = "  ⚠ high tail"
+                    tail = "  (high tail, advisory)" if short else "  ⚠ high tail"
                 print("  %-24s %.3f   P%02d%s" % (label, v, pct, tail))
             else:
                 print("  %-24s %.3f   (no norm)" % (label, v))
@@ -410,7 +418,9 @@ def main():
         n = len(sents)
         out = {"metrics": metrics(sents),
                "joins": join_details(sents) if n >= 3 else [],
-               "length_bin": length_bin(n) if n >= 3 else None}
+               "length_bin": length_bin(n) if n >= 3 else None,
+               # 1.6.0: tails of a 3-4 sentence paragraph are advisory (coarse steps)
+               "tails_advisory": 3 <= n <= 4}
         # n<3: render() prints the too-short note; --json must not instead
         # hand back a fabricated "3-4" bin and join rows for a passage that
         # has no interior structure.  Same input, same contract.

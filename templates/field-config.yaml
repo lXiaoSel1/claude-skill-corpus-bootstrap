@@ -36,6 +36,15 @@ terminology_only:
 # scans you chose not to OCR). Reviewed at Tier 0 acceptance.
 excluded:
 
+# Review and survey articles (1.6.0): searched for terminology, kept OUT of the
+# style sample, the cohesion norms and the chapter sample -- a review essay's
+# paragraphs are not a research paper's (tier0_accept.py lists candidates).
+reviews:
+
+# Optional extra design-line words for the evidence cards (cards.py), the
+# field's data sources: e.g. - CRSP   - NHANES
+design_terms:
+
 # ---- filled at Tier 2 (taxonomy approval) ----------------------------------
 # The field's chapter jobs, from the APPROVED induction — never economics'.
 # One item per job, its one-line functional definition as the item's comment:
@@ -64,6 +73,17 @@ abstract_start_markers:
 # evidence). Do NOT use Background/Methods/Results/Conclusions — those labels
 # occur INSIDE structured abstracts and would cut them after the first label.
 abstract_end_markers:
+
+# Positional blocks the extraction LOST, as `job:Key` items (1.6.1): the
+# slicer places them, so the next positional job starts after them, but
+# writes no slice. Use it when a slice holds only author lines or an article
+# history (a CAR text runs from the authors straight to "1. Introduction").
+positional_skip:
+
+# The manuscript's own paragraph target per chapter (1.6.1), as
+# `chapter:LO-HI:CITES` items, e.g. `literature-hypotheses:100-170:6`.
+# para_check.py --chapter <job> uses it when --band / --cites are not given.
+paragraph_targets:
 
 # Optional heading-vocabulary regex fragment boosting a1 recall (empty = rely
 # on title-case detection; declare the FIELD's words, not economics')

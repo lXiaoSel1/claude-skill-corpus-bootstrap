@@ -15,6 +15,7 @@ references/corpus (declared as lit_instance in the config), replacing the
 parent's hardcoded ../mimic-lit hop.
 """
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +88,32 @@ def positional_anchors(job):
     main_results_anchors generalized). [] = start right after the previous
     positional job."""
     return cp.as_list(_DATA.get("positional_anchors_" + job))
+
+
+def paragraph_target(chapter):
+    """((lo, hi) words, max distinct citations) for `chapter` from config
+    `paragraph_targets` (items `chapter:LO-HI:CITES`, the manuscript's own
+    target, e.g. `literature-hypotheses:100-170:6`), else (None, None).
+    para_check.py uses it when --chapter is given without --band / --cites."""
+    for item in cp.as_list(_DATA.get("paragraph_targets")):
+        m = re.match(r"^\s*([^:]+):\s*(\d+)\s*-\s*(\d+)\s*(?::\s*(\d+))?\s*$", str(item))
+        if m and m.group(1).strip() == chapter:
+            return (int(m.group(2)), int(m.group(3))), (int(m.group(4)) if m.group(4) else None)
+    return None, None
+
+
+def positional_skip():
+    """{job: {paper keys}} from config `positional_skip` (items `job:Key`):
+    papers whose extraction lost that positional block (a CAR text goes from
+    the author lines straight to '1. Introduction'). The slicer still places
+    the block, so the next positional job starts after it, but writes no
+    slice for it."""
+    out = {}
+    for item in cp.as_list(_DATA.get("positional_skip")):
+        job, _, key = str(item).partition(":")
+        if key.strip():
+            out.setdefault(job.strip(), set()).add(key.strip())
+    return out
 
 
 def abstract_end_markers():

@@ -2,7 +2,7 @@
 name: {{FIELD}}-lit
 description: "Review an ENGLISH passage you wrote on {{FIELD_KEYWORDS}} and report whether it reads like the {{FIELD}} literature, then return your text with the style fixed. Looks at word choice, terminology, vague versus precise nouns, and sentence-to-sentence cohesion against a measured corpus of {{FIELD}} papers. It is a register reviewer, not an author: your argument, your citations and your numbers are never touched. Use when user says \"审一下我这段{{FIELD}}英文\", \"像不像{{FIELD}}文献\", \"check my {{FIELD}} writing style\", \"does this read like the {{FIELD}} literature\". NOT a proofreader, NOT a fact-checker (/verify-claims), and NOT for Chinese prose."
 author: Xuan Tang
-version: 3.0.1
+version: 3.1.0
 argument-hint: "[file path or the text itself] [--audit]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Task"]
@@ -126,15 +126,17 @@ Rebuild the manifest with `py -3 scripts/build_corpus_meta.py` if the corpus cha
 | 1 | **INTAKE** — read the passage (file path, or the text pasted in the prompt) | 0–1 |
 | 2 | **SCAN** — read the passage against `register.md` R1–R11 and **write out the list of domain terms it contains**. A read-through, not a tool call | 0 |
 | 3 | **ATTEST** — split the term list: those `terms.md` clears by `ctx:`, and the rest. `py -3 scripts/attest.py "<term>" …` for the rest. **Any candidate AI-voice flag goes through this step too, before it becomes a finding** (rule 4) | 1–2 |
-| 3b | **COHESION** — for any passage of ≥3 sentences: `py -3 scripts/cohesion.py --section <sec> "<paragraph>"`. Its output seeds the JOINS table (R9) and names the mandatory M8 pair (R10) | 1 |
-| 4 | **FIX** — apply, recording a rule ID or corpus line per change. One more `attest.py` call only to prove a *replacement* is attested | 0–2 |
+| 3b | **COHESION** — for any passage of ≥3 sentences: `py -3 scripts/cohesion.py --section <sec> "<paragraph>"`. Its output seeds the JOINS table (R9) and names the mandatory M8 pair (R10). On a **3–4-sentence** paragraph its tails are marked advisory: every rate moves in coarse steps, so one event can reach a tail — read the joins, never the percentile alone. When the chapter's own register exists (`references/register-<sec>.md`, captured after Tier 2 with `measure_register.py --section <sec>`), read it for that chapter's sentence length, citation forms and verbs | 1 |
+| 4 | **FIX** — apply, recording a rule ID or corpus line per change. One more `attest.py` call only to prove a *replacement* is attested. **Rule B (1.6.0):** a replacement inside a clause attributed to a cited paper (the sentence whose subject is its `\citet`, or the clause its `\citep` closes) must also be in **that paper's own text**: `py -3 ../{{FIELD}}-draft/scripts/draftcheck.py src --find KEY "<replacement>" [KEY "<replacement>" …]`, one call for all of them. In the corpus but not in that paper → keep the passage's word and put both counts in LEAVE TO AUTHOR (a term that is real in the corpus cannot be put in a paper's mouth) | 0–2 |
+| 4b | **COPIED** — on the passage as corrected, for a passage that cites papers: `py -3 ../{{FIELD}}-draft/scripts/draftcheck.py src "<corrected passage>"`. It runs after FIX because a fix can bring a paper's wording in. Every `COPIED` line (7+ words shared with the cited paper) is a §2 finding and gets a REGISTER row: rewrite it, or quote it with its page, and run 4b once more (at most 2 runs). The same call reports numbers that are not in the paper they are attached to, which go to LEAVE TO AUTHOR (style only: never change a number) | 1–2 |
 | 5 | **SELF-CHECK** — the questions below | 0 |
 | 6 | **OUTPUT** — corrected passage, then `TERMS`, then `REGISTER`, then the change table | 0 |
 | 7 | **CACHE** — `py -3 scripts/cache.py add "<term>" …` for everything this run established. Nothing is lost between runs | 1 |
 
-**Budget: ≤9 tool calls; no subagent unless `--audit`** (run inside `{{FIELD}}-polish`, the budget does not apply: see its step d). Allocation: passage 1 · `register.md` 1 · `terms.md` 1 ·
+**Budget: ≤11 tool calls; no subagent unless `--audit`** (run inside `{{FIELD}}-polish`, the budget does not apply: see its step d). Allocation: passage 1 · `register.md` 1 · `terms.md` 1 ·
 **`attest.py` ≥1, not skippable** · **`cohesion.py` 1 (≥3-sentence passages, not skippable)** ·
-replacement evidence 0–2 · `cache.py` 1.
+**`draftcheck.py src` 1–2 after FIX (passages that cite, not skippable)** · replacement evidence 0–2
+(`attest.py` for the corpus, `src --find` for the cited paper) · `cache.py` 1.
 
 The attestation call is the one this skill exists for. When the budget is tight, cut the replacement
 evidence call, never the attestation. `attest.py` takes several terms in one invocation and searches
@@ -168,6 +170,11 @@ did. That is deliberate: a checklist answered from memory is answered "yes".
    `CHANGED` cites a rule ID or a corpus line, the register pass was skipped.
 7. **Did step 7 run?** Everything this run established should be in `candidates.md`, or the next run
    re-litigates it from scratch.
+8. **Was 4b run on the passage that OUTPUT prints?** A `draftcheck src` run on the input checks the
+   input: a fix can bring a paper's wording in. Run it on the corrected passage.
+9. **Does every replacement inside an attributed clause show its `src --find` hit in the cited
+   paper?** A `CHANGED` row whose only evidence is a corpus count (`range:`) puts the field's word in
+   the paper's mouth: restore the passage's word and move the row to LEAVE TO AUTHOR.
 
 ## What to flag
 

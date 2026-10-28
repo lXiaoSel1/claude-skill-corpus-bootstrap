@@ -19,6 +19,11 @@ What it does, in order:
      sanitised where needed, the crosswalk kept in the index) and runs
      ingest.py --map and build_corpus_meta.py -- unless Tier 0 is already
      built, in which case the corpus is left as it is.
+     (1.6.0) --reuse-corpus DIR: a key whose text is already DIR/<key>.txt
+     (an earlier corpus, e.g. a hand-built skill's) is copied verbatim
+     instead of converting its PDF again -- the PDF stays in the index for
+     the polish checks; --extra-map CSV adds papers the manuscript does not
+     cite (key,path[,group][,role][,note]; a path may be a .pdf or a .txt).
 Next: tier0_accept.py, calibrate_paragraphs.py, tier1_fill.py, then
 onboard.py --finish.
 
@@ -26,7 +31,7 @@ RUN
     py -3 scripts/onboard.py --manuscript <main.tex> --library <folder or .bib> [--library ...]
         [--notes <folder>] [--notes-pdf-field pdf] [--field <slug> --keywords "..."]
         [--citation-style author-year|numeric|mixed] [--dest <skills dir>]
-        [--include-uncited] [--dry-run]
+        [--include-uncited] [--reuse-corpus <txt dir>] [--extra-map <csv>] [--dry-run]
     py -3 scripts/onboard.py --finish --field <slug> [--manuscript <main.tex>] [--dest <skills dir>]
 --dry-run builds and reports the index only: no stamping, no config, no ingest.
 Exit code 3 when the field must be named first; 2 on an error.
@@ -299,21 +304,72 @@ def contains_seq(hay, needle):
 
 
 # ---- notes ------------------------------------------------------------------------
-def scan_notes(notes_dir, field):
+FRONT_KEY = re.compile(r"^\s*(?:bib_key|bibkey|citekey|cite_key|citation_key|key)\s*[:：]\s*['\"]?([^\s'\"]+)",
+                       re.M | re.I)
+PDF_DIR = re.compile(r"^\s*(?:PDF路径|PDF目录|pdf_dir|pdf_path|pdf_folder)\s*[:：]\s*(.+?)\s*$", re.M | re.I)
+
+
+def note_key(text, fname):
+    """A note's cite key: the bib_key (or citekey / key) in its front matter
+    when it has one, else its file name."""
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        m = FRONT_KEY.search(text[:end] if end > 0 else text[:2000])
+        if m:
+            return m.group(1)
+    return fname
+
+
+def note_pdf(value, note_dir, text, names):
+    """The PDF a note names: a path from the note's folder, else the file name
+    in the folder a PDF-directory field gives, else a library PDF of that name."""
+    v = value.strip().strip("'\"")
+    cands = [v if os.path.isabs(v) else os.path.join(note_dir, v)]
+    d = PDF_DIR.search(text)
+    if d:
+        dd = d.group(1).strip().strip("'\"")
+        cands.append(os.path.join(dd if os.path.isabs(dd) else os.path.join(note_dir, dd), os.path.basename(v)))
+    for c in cands:
+        if os.path.isfile(c):
+            return os.path.normpath(c)
+    return names.get(name_key(os.path.basename(v))) or os.path.normpath(cands[0])
+
+
+def scan_notes(notes_dir, field, names=None):
+    """{cite key: {"note": path, "pdf": path or None}}; names maps a lower-case
+    PDF file name to its path in the library folders."""
     out = {}
     pat = re.compile(r"^\s*(?:%s|pdf|PDF|file|对应PDF)\s*[:：]\s*(.+?)\s*$" % re.escape(field), re.M)
     for root, _, files in os.walk(notes_dir):
-        for f in files:
+        for f in sorted(files):
             if not f.endswith(".md"):
                 continue
             p = os.path.join(root, f)
             with open(p, encoding="utf-8", errors="replace") as fh:
-                m = pat.search(fh.read(4000))
-            pdf = None
-            if m:
-                v = m.group(1).strip().strip("'\"")
-                pdf = os.path.normpath(v if os.path.isabs(v) else os.path.join(root, v))
-            out[f[:-3]] = {"note": p, "pdf": pdf}
+                text = fh.read(4000)
+            key = note_key(text, f[:-3])
+            if key in out and f[:-3] != key:         # two notes, one key: the one named after it wins
+                continue
+            m = pat.search(text)
+            out[key] = {"note": p, "pdf": note_pdf(m.group(1), root, text, names or {}) if m else None}
+    return out
+
+
+def name_key(fname):
+    """A file name compared without case, spaces or punctuation: a note that
+    writes "Constraints Evidence" finds "Constraints  Evidence.pdf"."""
+    return re.sub(r"[^0-9a-z]+", "", fname.lower())
+
+
+def pdf_names(folders):
+    """{name_key(file name): path} for every PDF under the library folders."""
+    out = {}
+    for folder in folders:
+        for root, dirs, files in os.walk(folder):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for f in files:
+                if f.lower().endswith(".pdf"):
+                    out.setdefault(name_key(f), os.path.normpath(os.path.join(root, f)))
     return out
 
 
@@ -362,13 +418,29 @@ def match(keys, bib, notes, pdfs):
                         and yr in os.path.basename(r["path"])]
                 if hits:
                     cands, how = hits, "author-year"
-        cands = sorted(set(cands), key=rank)
+        cands = sorted(set(cands), key=ranker(e))
         if cands:
             rec.update(pdf=cands[0], method=how)
             if len(cands) > 1:
                 rec["candidates"] = cands
         idx[key] = rec
     return idx
+
+
+def ranker(entry):
+    """Order one key's candidates: a file named after the entry (first author
+    and year, or the title's first words) before one that only mentions it --
+    a paper whose references cite the title is not the paper -- then rank()."""
+    sur = first_author(entry) if entry else ""
+    yr = (entry["fields"].get("year", "") if entry else "").strip()[:4]
+    tw = words(entry["fields"].get("title", "")) if entry else []
+
+    def key(path):
+        bw = words(os.path.basename(path))
+        named = bool(sur) and sur in bw and (not yr or yr in bw)
+        titled = len(tw) >= 3 and contains_seq(bw, tw[:5])
+        return (not (named or titled),) + rank(path)
+    return key
 
 
 def rank(path):
@@ -409,6 +481,8 @@ def main():
     ap.add_argument("--citation-style", default="author-year", choices=F.STYLES)
     ap.add_argument("--dest")
     ap.add_argument("--include-uncited", action="store_true")
+    ap.add_argument("--reuse-corpus")
+    ap.add_argument("--extra-map")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--finish", action="store_true")
     a = ap.parse_args()
@@ -459,7 +533,7 @@ def main():
         for p in bib_files(e):
             if os.path.isfile(p) and os.path.dirname(p) not in flat:
                 flat.append(os.path.dirname(p))
-    notes = scan_notes(F.user_path(a.notes), a.notes_pdf_field) if a.notes else {}
+    notes = scan_notes(F.user_path(a.notes), a.notes_pdf_field, pdf_names(folders)) if a.notes else {}
     for n in notes.values():
         if n["pdf"] and os.path.isfile(n["pdf"]) and os.path.dirname(n["pdf"]) not in flat:
             flat.append(os.path.dirname(n["pdf"]))
@@ -533,7 +607,44 @@ def main():
                 c += "_x"
             taken.add(c.lower())
             rows.append((c, r["path"], "", {"type": "", "method": "uncited"}))
-    if not rows:
+    reused = 0
+    if a.reuse_corpus:
+        rd = F.user_path(a.reuse_corpus)
+        if not os.path.isdir(rd):
+            F.die("--reuse-corpus: no folder %s" % rd)
+        out = []
+        # a cited key the library has no PDF for still enters with its old text
+        have = {r[2] for r in rows}
+        rows = rows + [(rec["corpus_key"], None, k, rec) for k, rec in sorted(idx.items())
+                       if k not in have and any(os.path.isfile(os.path.join(rd, n + ".txt"))
+                                                for n in (rec["corpus_key"], k) if n)]
+        for c, p, k, rec in rows:
+            txt = next((os.path.join(rd, n + ".txt") for n in (c, k) if n
+                        and os.path.isfile(os.path.join(rd, n + ".txt"))), None)
+            if txt:
+                reused += 1
+                rec = dict(rec, method=(rec.get("method", "") + "+reused-txt"))
+            out.append((c, txt or p, k, rec))
+        rows = out
+    extra = []
+    if a.extra_map:
+        em = F.user_path(a.extra_map)
+        base = os.path.dirname(em)
+        taken = {r[0].lower() for r in rows}
+        with open(em, encoding="utf-8-sig", newline="") as fh:
+            for r in csv.DictReader(fh):
+                key, path = (r.get("key") or "").strip(), (r.get("path") or "").strip()
+                if not key or not path:
+                    continue
+                if key.lower() in taken:
+                    print("  --extra-map: %s is already in the map (cited); the cited row is kept" % key)
+                    continue
+                path = path if os.path.isabs(path) else os.path.normpath(os.path.join(base, path))
+                if not os.path.isfile(path):
+                    F.die("--extra-map: %s -> %s does not exist" % (key, path))
+                taken.add(key.lower())
+                extra.append((key, path, r.get("group", ""), r.get("role", ""), r.get("note", "") or "uncited (extra map)"))
+    if not rows and not extra:
         F.die("no cited key has a PDF -- nothing to ingest")
     cmap = os.path.join(fld.lit, "references", "corpus_map.csv")
     with open(cmap, "w", encoding="utf-8", newline="") as fh:
@@ -544,7 +655,10 @@ def main():
             role = ("report" if t in REPORT_TYPES else "working" if t in WORKING_TYPES
                     else "research" if t else "")
             w.writerow([c, p, "", role, "cite:%s type:%s match:%s" % (k, rec.get("type", ""), rec.get("method", ""))])
-    print("\ncorpus map: %s (%d rows)" % (cmap, len(rows)))
+        for key, path, group, role, note in extra:
+            w.writerow([key, path, group, role, note])
+    print("\ncorpus map: %s (%d rows: %d cited, %d of them reused as text; %d extra)"
+          % (cmap, len(rows) + len(extra), len(rows), reused, len(extra)))
     print("ingest:")
     F.run([sys.executable, "-B", os.path.join(F.HERE, "ingest.py"), fld.lit, "--map", cmap])
     print("manifest:")
@@ -624,6 +738,15 @@ def report(idx, pdfs, keys):
     wp = sorted(k for k, r in idx.items() if r["pdf"] and r["type"] in WORKING_TYPES)
     if wp:
         print("  working papers / preprints / reports (research unless short) (%d): %s" % (len(wp), ", ".join(wp)))
+    # an article whose PDF says on its first page that it is a manuscript or a
+    # preprint: its pages, and sometimes its tables, are not the journal's
+    by_path = {r["path"]: r for r in pdfs}
+    marks = (["author", "manuscript"], ["accepted", "manuscript"], ["hhs", "public", "access"], ["preprint"])
+    ms_ = sorted(k for k, r in idx.items() if r["pdf"] and r["type"] not in WORKING_TYPES
+                 and any(contains_seq((by_path.get(r["pdf"]) or {}).get("words", [])[:400], m) for m in marks))
+    if ms_:
+        print("  articles whose PDF is a manuscript or preprint, not the published version (%d): %s"
+              % (len(ms_), ", ".join(ms_)))
     uncited = len({r["path"] for r in pdfs} - {r["pdf"] for r in idx.values() if r["pdf"]})
     print("  library PDFs not cited by the manuscript: %d (--include-uncited adds them to the corpus)" % uncited)
 

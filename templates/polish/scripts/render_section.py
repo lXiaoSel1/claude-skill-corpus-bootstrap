@@ -77,6 +77,10 @@ ACC = {"'": {"e": "é", "a": "á", "i": "í", "o": "ó", "u": "ú", "E": "É"},
 
 def render(line):
     line = re.sub(r"(?<!\\)%.*", "", line)
+    # a heading inside the section (a single-file manuscript split at \section):
+    # its title on a line of its own; labels and \input lines print nothing
+    line = re.sub(r"\\(?:sub)*section\*?(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}", r"\1", line)
+    line = re.sub(r"\\(?:label|input|include)\{[^}]*\}", "", line)
     line = re.sub(r"\\citet\*?" + OPT + r"\{([^}]+)\}", lambda m: ct(m.group(1), m.group(2)), line)
     line = re.sub(r"\\citepalias\{([^}]+)\}", lambda m: "(" + "; ".join(alias(k) for k in keys(m.group(1))) + ")", line)
     line = re.sub(r"\\citep\*?" + OPT + r"\{([^}]+)\}", lambda m: cp(m.group(1), m.group(2)), line)

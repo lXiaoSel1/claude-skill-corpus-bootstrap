@@ -436,7 +436,7 @@ py -3 ../ecology-draft/scripts/check_canon_quotes.py
 py -3 tests/run_selftest.py
 ```
 
-共 172 项检查，分六部分：
+共 217 项检查，分十部分：
 
 1. 对模板脚本的单元测试。
 2. 在临时文件夹里的集成测试：先生成一个一次性的领域，再造一份故意埋了缺陷的测试语料（弯引号、跨行断开的短语、上标引用、纯图片的扫描件、只有一段的简报），然后跑第 0、1 关，每个缺陷都必须被抓出来。
@@ -444,6 +444,10 @@ py -3 tests/run_selftest.py
 4. 在同一个领域上测写作指南：`canon_ingest.py` 读一个测试文件夹和一个 `.bib`，里面有一份 PDF、一个带弯引号和脚本块的网页、一个带连字和软连字符的文本，以及一份扫描件。然后用 `check_canon_quotes.py` 核对几种引文：引错的、片段顺序颠倒的、太短的、行号不对的、被行尾连字符断开的、在双栏页面右栏的。最后检查 draft `check_drift` 第 4 关的各项。
 5. 1.3.0 里会出错的输入：biblatex 引用、以前会让生成 skill 出错的领域名和关键词、带方括号的文件夹、扩展名大写的 `.PDF`、中途被打断的导入、第 0 关里的工作论文、第 3 关为空的 registry，以及没有 PDF 转换器时的写作指南。
 6. 1.4.0 和 1.4.1 的改动：模板里没有标注的父本名称和数字、不成对的父本标记、改过的每个 polish 脚本（sweep（含 `--since`）、cohesion_loop、opener_check、sent_diff、trial_diff、counts、compile、source_term_check、pdf_ctx、note_terms、rep、scan_appositive）、`attest.py` 对只靠末词其他形式命中的短语的判定，以及前面各部分没跑过的 draft 和 lit 脚本（draftcheck、state、build_evidence_map、build_exemplars、cache）。
+7. 1.5.0 的改动：`num_check.py`（在被引论文里查每个数字，包括区间和千分位分隔符）、从 `.bib` 和页面上读出的印刷页码、`copy_check.py`、正文写在主文件里而表格用 `\input` 引入的稿件、按前置信息里的 key 找到的阅读笔记，以及 `draftcheck.py` 能识别的引用命令。
+8. 1.6.0 的改动：在测试领域上跑快速通道（`draftcheck.py src`、`cards.py`、带 `--band` 和 `--cites` 的 `para_check.py`、`short_paras.py`、`version-card --full`、`state.py cache --from`），按章节测的段落形状，`cohesion.py` 对短段落的处理，`measure_register.py --section`，把综述文章排除在文风规范之外，以及 `onboard.py --reuse-corpus`。
+9. 1.6.1 的改动：`seed_from.py` 在第 2、3 关的导入（整篇导入、部分导入和重读；后一份修正文件优先；新分类里没有的旧章节），以及 `a2_build.py`、`verify_shards.py` 对导入行的处理。
+10. 1.6.2 的改动：`recount.py` 读后面带注释的句数行、`check_drift.py` 打印的章数，以及 `measure_verbs.py --write`。
 
 自检需要 PyMuPDF 和 `pdftotext`，除临时文件夹外不写任何文件。
 
@@ -472,6 +476,6 @@ docs/images/                README 用到的截图
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。版本 1.4.1（2026-10-14）。
+MIT，见 [LICENSE](LICENSE)。版本 1.6.3（2026-10-28）。
 
 作者：Xuan Tang。本项目在 Pedro Sant'Anna 的 [claude-code-my-workflow](https://github.com/pedrohcgs/claude-code-my-workflow) 基础上开发，那是一个用 Claude Code 做学术工作的模板。

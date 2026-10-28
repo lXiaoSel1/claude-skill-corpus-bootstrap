@@ -1,8 +1,8 @@
 ---
 name: {{FIELD}}-polish
-description: "Revise an ENGLISH manuscript on {{FIELD_KEYWORDS}} one section at a time against the {{FIELD}} literature, the way a careful co-author would. A whole-manuscript register sweep, frame and opener checks, sentence cohesion, rare words checked against the cited papers' own PDFs, a meaning pass (one reading per sentence), mechanical diffs that prove numbers, citations and source comments did not move, a sentence-by-sentence check of every changed claim against its source, then compile and render. Works on the user's own main.tex (sections come from its \\input files or headings); no configuration file. Use when user says \"逐节改写我的{{FIELD}}英文稿\", \"按文献改这一节\", \"用语料库把这节改一遍\", \"polish this section against the literature\", \"run the section workflow on <section>\". Calls /{{FIELD}}-lit for register and terms. NOT a drafting tool (/{{FIELD}}-draft), NOT a translator, NOT for Chinese prose."
+description: "Revise an ENGLISH manuscript on {{FIELD_KEYWORDS}} one section at a time against the {{FIELD}} literature, the way a careful co-author would. A whole-manuscript register sweep, frame and opener checks, sentence cohesion, rare words checked against the cited papers' own PDFs, a meaning pass (one reading per sentence), mechanical diffs that prove numbers, citations and source comments did not move, a sentence-by-sentence check of every changed claim against its source, then compile and render. Works on the user's own main.tex (sections come from its \\input files or headings); no configuration file. Use when user says \"逐节改写我的{{FIELD}}英文稿\", \"按{{FIELD}}文献改这一节\", \"用{{FIELD}}语料库把这节改一遍\", \"polish this section against the {{FIELD}} literature\", \"run the {{FIELD}} section workflow on <section>\". Calls /{{FIELD}}-lit for register and terms. NOT a drafting tool (/{{FIELD}}-draft), NOT a translator, NOT for Chinese prose."
 author: Xuan Tang
-version: 1.1.1
+version: 1.2.0
 argument-hint: "<section key> [--manuscript main.tex] [--batch]"
 disable-model-invocation: false
 allowed-tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "Skill"]
@@ -54,11 +54,16 @@ A step whose tier is missing is skipped and named in the record, never faked.
 1. **Facts come from the source.** What a cited paper found is written only
    if its PDF or the reading note says it. Nothing the reader could infer is
    added. The verb keeps the source's strength: `suggest` is not `find`,
-   `related to` is not `attributable to`, `billed to` is not `paid by`.
+   `related to` is not `attributable to`, `billed to` is not `paid by`
+   (`sent_diff.py` lists every change of strength for h2).
    A fix adds words only from the source and only of two kinds: the
    comparator the source states (§31), and a qualifier the snapshot had that
    an edit dropped (lesson 2). A reason (§29), a scope or a finding the author
-   did not write goes under "left to the author" in the record.
+   did not write goes under "left to the author" in the record. A reading
+   note is a pointer, not the source: a number or a quotation taken from a
+   note counts only once `pdf_ctx.py` or `num_check.py` finds it in the PDF (a
+   note once said a table was missing from a PDF that had it); when the PDF
+   has no text on that page, the record says so.
 2. **Wording comes from the corpus.** A frame or phrase of our own is used only
    if `{{FIELD}}-lit`'s `attest.py --scope style` finds it in **≥3 papers**, and
    the concordance shows the same sense. A term the cited paper itself uses
@@ -67,7 +72,8 @@ A step whose tier is missing is skipped and named in the record, never faked.
    sentence) takes its paragraph's cited papers as its sources. Three more
    cases: (a) the cited paper's own wording for a result, found in its PDF
    with `pdf_ctx.py`, is exempt like a term up to about six words; a longer
-   stretch is quoted with its page or rebuilt from attested parts, because
+   stretch (`copy_check.py` lists every one) is quoted with its page or
+   rebuilt from attested parts, because
    copying it unquoted is the lifted phrasing that `{{FIELD}}-lit`'s register
    §2 flags; (b) two attested frames may be joined, and the junction is
    checked in h2, not by attest; (c) when no attested phrase has the same
@@ -155,22 +161,39 @@ a written verdict. A word is either
    py -3 scripts/source_term_check.py pairs.tsv          # KEY<TAB>term per line
    py -3 scripts/pdf_ctx.py KEY "regex" [width]           # every context in one paper
    py -3 scripts/note_terms.py KEY1,KEY2 "regex"          # quotes in the reading notes, with pages
+   py -3 scripts/num_check.py <section>                   # every number of every cited sentence, in the PDF
    ```
    (ligatures restored, words split at a line end re-joined, hyphen / space /
    nothing between words, inflected endings, abbreviations defined in the
    manuscript or the paper tried both ways and shown as "+N via ABBR=…"; NO
    PDF TEXT says when a paper has no text to search). pdf_ctx.py and
    source_term_check.py print each context's page, p.N counting the PDF
-   file's pages from 1; note_terms.py prints the page the note gives; or
+   file's pages from 1, with the printed page when the PDF's page labels,
+   its page headers or the .bib pages field give one ("p.16 (printed 988)");
+   they name a PDF that is a manuscript or working paper, and pages with no
+   text layer, which were not searched. note_terms.py prints the page the
+   note gives; or
 2. **our own wording** — replaced by an attested phrase whose concordance has
    the same sense ("concerned" in 3 papers all meaning *worried* does not
    license "concerned" meaning *involved*).
+
+**Numbers.** `num_check.py` looks up every number of every cited sentence of
+the section in the cited papers' texts: the whole section, not only what an
+edit touched, so a number the draft copied wrong is caught too. Each sentence
+gets TOGETHER (one paper holds all its numbers close together, with the
+page), APART, SPREAD (each number in a different cited paper) or MISSING (a
+number none of them holds). Every APART, SPREAD and MISSING goes into the
+record and is checked by hand: a typo, a number in a table the PDF holds as
+an image, or one the author computed.
 
 ### c · Split long sentences, replace frames
 
 By hand, after step e. Before replacing a 0–2-paper word or a domain term,
 check e's verdict: a word the cited paper uses is a source term (rule 2's
-exemption), not a frame to replace. Long sentence → a design sentence (data,
+exemption), not a frame to replace. A replaced frame keeps the claim's
+strength: a 0-paper hedge ("evidence pointed to X") is replaced by an attested
+frame that hedges as much ("is consistent with X"), not by a stronger one
+("studies support the X hypothesis"). Long sentence → a design sentence (data,
 sample, method) and a result sentence. "The authors argue / note / state" →
 keep the subject and give it the source's verb: argue or suggest for the
 source's interpretation, found or concluded for a claim the source states in
@@ -187,7 +210,10 @@ py -3 <{{FIELD}}-lit>/scripts/attest.py --scope style "candidate one" "candidate
 ```
 Read the concordance, not only the count. 0–2 papers: do not use it
 (attest.py exits 1 when any term in the call is NOT ATTESTED: a verdict, not
-a failed run). A
+a failed run). After the edits, `py -3 scripts/copy_check.py <section>` lists
+every unquoted stretch of 7 or more words a cited sentence shares with its
+paper (rule 2(a)): rewrite each from the paper's content in attested
+frames, or quote it with its page. A
 phrase that attest.py found **only** through the suffix family (it says
 "matched ONLY via the suffix family") is THIN unless the concordance shows
 the same form and sense, and hits in boilerplate (conflict-of-interest or
@@ -277,7 +303,12 @@ without page comments, one cited study (a new block starts where the cited
 keys change, and at a paragraph that opens without a citation). The changed
 sentences print as `-` / `+`. Check every sentence
 whose meaning moved (a new verb, an added comparison, a qualifier merged,
-split or dropped, a renamed category) against the note or PDF.
+split or dropped, a renamed category) against the PDF (a note only points to
+the place), and run `num_check.py` and `copy_check.py` on the section again.
+Every `STRONGER?` and `HEDGE LOST?` line is a claim whose strength changed
+(rule 1): keep it only if the source line says it that strongly, else restore
+the snapshot's wording; each one goes in the record's strength table. A hedge
+marked as possibly moved is checked in the block it moved to.
 
 ### i · Compile and count
 
@@ -308,7 +339,8 @@ summary and anything left to the author.
 Fill `templates/parity_template.md` into `<manuscript dir>/.polish/records/<section>.md`:
 metrics before/after, rejected and adopted frames with paper counts, the
 `{{FIELD}}-lit` blocks as returned, the rare-word verdict table with source
-quotes and pages, the section-G findings, the h2 checks, and what is left to
+quotes and pages, the num_check verdicts that are not TOGETHER and what was
+done about each, the section-G findings, the h2 checks, and what is left to
 the author. Append one line per decision to the session log,
 `<manuscript dir>/.polish/records/session.log` (rep.py and rep_multi.py
 already add a line for every write).
@@ -345,6 +377,8 @@ py -3 scripts/counts.py                                            # a: baseline
 py -3 scripts/sweep.py <sec>                                       # b
 py -3 scripts/source_term_check.py pairs_<sec>.tsv                 # e: verdicts before c
 py -3 scripts/pdf_ctx.py KEY "term"
+py -3 scripts/num_check.py <sec>                                   # e: every number against the PDF
+py -3 scripts/copy_check.py <sec>                                  # c, h2: unquoted 7+-word stretches
 py -3 <lit>/scripts/attest.py --scope style "candidate"            # c, for every new frame
 py -3 scripts/rep.py <sec> pairs/<sec>-c.txt                       # c: write before d reads the file
 #   Skill {{FIELD}}-lit on the section; then
@@ -372,13 +406,15 @@ py -3 scripts/render_section.py <sec>                              # j
 | `cohesion_loop.py` | d | `{{FIELD}}-lit`'s cohesion.py on every paragraph of 3+ sentences; every join |
 | `opener_check.py` | d2 | paragraph openers, leading connectives and repeated first-three-word frames against corpus openers |
 | `source_term_check.py` | e | (key, term) pairs searched in the cited paper, abbreviations both ways |
-| `pdf_ctx.py` | e / h2 | every context of a regex in one paper |
+| `pdf_ctx.py` | e / h2 | every context of a regex in one paper, with file and printed pages |
+| `copy_check.py` | c / h2 | unquoted stretches of 7+ words a cited sentence shares with its paper, with pages |
+| `num_check.py` | e / h2 | every number of every cited sentence looked up in the cited papers: TOGETHER / APART / SPREAD / MISSING, with pages |
 | `note_terms.py` | e / h2 | quoted source sentences in reading notes, with pages |
 | `trial_diff.py` | g | numbers, cite keys, comments vs a snapshot; numbers block by block |
 | `para_lengths.py` | g / i | sentences per paragraph, uniform runs, long sentences |
 | `scan_appositive.py` | g | tails after a comma: noun phrases, with-absolutes, participles |
 | `words_compare.py` | g | sentence length vs corpus chapter slices (optional) |
-| `sent_diff.py` | h2 | changed sentences per source block (page comment or cited study) |
+| `sent_diff.py` | h2 | changed sentences per source block (page comment or cited study), and each change of claim strength (STRONGER? / HEDGE LOST?) |
 | `compile.py` | i | compile the user's main.tex, report warnings, pages and split citations; `--dry-run` shows the engine |
 | `counts.py` | a / i | cited keys, page comments, bibitems vs the step-a baseline |
 | `render_section.py` | j | readable text with printed citation labels |
@@ -390,6 +426,12 @@ snapshot, a tier missing).
 
 ## Known limits
 
+- num_check.py compares numbers by value, not sign, and skips integers under
+  10. A number in a table stored as an image, or on a scanned page, is not in
+  the PDF's text; the scripts name such pages. OCR is not built in: run
+  `ocrmypdf` on the PDF first.
+- Printed page numbers are inferred (page labels, page headers, the .bib pages
+  field) and are absent for a manuscript or a PDF without them.
 - English only: the splitter, the corpus and the norms are English.
 - cohesion.py grades joins, not percentiles per join, and does not resolve
   abbreviations (a long name followed by its abbreviation reads as BROKEN?).

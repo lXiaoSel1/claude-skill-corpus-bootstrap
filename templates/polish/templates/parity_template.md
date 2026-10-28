@@ -21,6 +21,16 @@ Recurring 0-paper frames, one-off frames, 0–2-paper words, long sentences, as 
 | key | draft wording | source (quoted, with page) | verdict: source term kept / own wording replaced |
 |---|---|---|---|
 
+Numbers (num_check.py): every sentence that is not TOGETHER, what the PDF shows, what was done.
+
+| sentence | number(s) | verdict | the PDF (page) | done |
+|---|---|---|---|---|
+
+Copied stretches (copy_check.py): each one and whether it was rewritten or quoted with its page.
+
+| sentence | stretch (n words) | paper, page | rewritten / quoted |
+|---|---|---|---|
+
 ## c, d2. Frames and openers
 
 Counts are from `attest.py --scope style` (N = the style-safe papers).
@@ -44,6 +54,11 @@ TERMS (scope=term, N=<terminology_safe>) and REGISTER (scope=style) blocks paste
 ## h2. Changed meanings checked against the source
 
 Every sentence sent_diff shows as changed in meaning: the source line it now rests on. New wording attested (papers).
+
+Claim strength (sent_diff's STRONGER? / HEDGE LOST? lines): each one, the source line, and whether it was kept or the snapshot's wording restored.
+
+| sentence | change | source line (page) | kept / restored |
+|---|---|---|---|
 
 ## Left to the author
 

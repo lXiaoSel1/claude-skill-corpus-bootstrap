@@ -35,11 +35,15 @@ therefore never matched any line — the true cause of its 17/38 abstract over-r
 | `pipeline/recall.py` | reads `groundtruth.json` only | hand-build it at the Tier 2 gate |
 | `pipeline/recount.py` | scans all records/*.md for the PASS1 `N sentences` format | parent's two legacy formats not supported |
 | `pipeline/para_numbers.py` | 2026-10-07: references/ path fixed (it pointed at the skill root and found nothing); one records/<chapter>.md per chapter; digit-initial and hyphenated keys; single-file chapters | — |
-| `scripts/measure_structure.py` | DENOMS from registry; intro_job documented; citation counting for author-year, numeric, superscript and mixed (a stray BACKSPACE character had disabled the author-year regex); year-in-parentheses no longer an equation label; `equation_layer: off` for prose fields | layer A exists only with a tagged round |
-| `scripts/draftcheck.py` | ownership regex by citation_style; manuscript tables from config; LaTeX and pandoc citations; `section` skipped when `equation_layer: off` | numeric-citation ownership is judgment-first |
+| `scripts/measure_structure.py` | 1.6.0: layer F (paragraph shape per chapter, style-safe papers only); DENOMS from registry; intro_job documented; citation counting for author-year, numeric, superscript and mixed (a stray BACKSPACE character had disabled the author-year regex); year-in-parentheses no longer an equation label; `equation_layer: off` for prose fields | layer A exists only with a tagged round |
+| `scripts/draftcheck.py` | ownership regex by citation_style (1.6.0: discourse markers in any case); manuscript tables from config; LaTeX and pandoc citations; `section` skipped when `equation_layer: off`; 1.6.0: `src`, `router`, `version-card [--full]`, `para --chapter` P90, a paragraph passed as text | numeric-citation ownership is judgment-first |
 | `scripts/check_drift.py` | canon path from config; T-series and hyphenated keys; single-file chapters; slice fingerprint; retired job folders; PARENT-BLOCK markers in SKILL.md and references/*.md fail at their tier; PARENT-BLOCK and PARENT-EXAMPLE markers must pair | — |
 | `scripts/build_evidence_map.py` | manuscript paths from config; exits 0 with a message before onboarding | LaTeX-shaped: a Markdown manuscript needs its parser written at onboarding |
-| `scripts/state.py` | unchanged (parameterized via DRAFT_STATE_PATH) | — |
+| `scripts/state.py` | parameterized via DRAFT_STATE_PATH; 1.6.0: `cache --from` (many rows, one write) | — |
+| `scripts/_src.py` | NEW 1.6.0, ported from the parent's fast lane: corpus from `lit_instance`, a key's corpus key / PDF / note from the onboarding index then notes-index.md; MAP-21-style names kept in words, dropped only where numbers are read | a key with no corpus text and no indexed PDF has NO TEXT |
+| `scripts/cards.py` · `_tiers.py` · `_ngram.py` | NEW 1.6.0, ported: design words generic + `design_terms`; `_ngram` reads the lit instance's style-safe set through attest.py | card R/D patterns are English empirical prose |
+| `scripts/para_check.py` | NEW 1.6.0, ported; `.bbl` from `manuscript_tex`; `--band` / `--cites` must-pass; layer-F percentiles | the STOP list and TERM_TIE are the parent's calibration |
+| `scripts/short_paras.py` | NEW 1.6.0: a chapter's short corpus paragraphs; `--check` verifies a short-paragraph bank verbatim | ¶n counts textseg paragraphs, not PASS1 records |
 
 ## Still parent-calibrated (documented, re-measure in the instance)
 
